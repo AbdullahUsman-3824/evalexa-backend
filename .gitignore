@@ -4,6 +4,8 @@
 /build
 /tmp
 
+/.vscode
+
 # Logs
 logs
 *.log
@@ -15,10 +17,14 @@ lerna-debug.log*
 
 # dotenv environment variable files
 .env
+.env.local
 .env.development
 .env.test
 .env.production
+.env.backup
 
 # temp directory
 .temp
 .tmp
+
+/generated/prisma

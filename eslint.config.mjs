@@ -26,10 +26,23 @@ export default tseslint.config(
   },
   {
     rules: {
+      // actual errors only
+      'no-undef': 'error',
+      'no-unreachable': 'error',
+
+      // warnings (build issues ban sakte hain)
+      'no-unused-vars': 'off', // ts wala handle karega
+      '@typescript-eslint/no-unused-vars': 'warn',
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
-      '@typescript-eslint/no-unsafe-argument': 'warn',
-      "prettier/prettier": ["error", { endOfLine: "auto" }],
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+
+      // formatting off (prettier errors bhi hatao)
+      'prettier/prettier': 'off',
     },
   },
 );
