@@ -10,7 +10,7 @@ export class CreateCompanyDto {
   @IsString()
   @MinLength(2)
   @MaxLength(150)
-  name: string;
+  name!: string;
 
   @IsOptional()
   @IsUrl()
@@ -18,11 +18,11 @@ export class CreateCompanyDto {
 
   @IsString()
   @MaxLength(100)
-  industry: string;
+  industry!: string;
 
   @IsString()
   @MaxLength(50)
-  companySize: string;
+  companySize!: string;
 
   @IsOptional()
   @IsUrl()
@@ -30,7 +30,7 @@ export class CreateCompanyDto {
 
   @IsString()
   @MaxLength(255)
-  location: string;
+  location!: string;
 
   @IsOptional()
   @IsString()

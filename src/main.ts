@@ -37,6 +37,17 @@ async function bootstrap() {
     }),
   );
 
+  const corsOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    : true;
+
+  app.enableCors({
+    origin: corsOrigins,
+    credentials: true,
+  });
+
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Evalexa API')
     .setDescription('Evalexa backend API documentation')
