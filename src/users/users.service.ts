@@ -4,7 +4,7 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { hash } from 'bcryptjs';
+import { hash } from 'bcrypt';
 import { Prisma } from '@prisma/client';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -28,6 +28,10 @@ const userPublicSelect = {
 export class UsersService {
   constructor(private readonly db: DatabaseService) {}
 
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
+  }
+
   private hasPrismaErrorCode(error: unknown, code: string): boolean {
     return (
       typeof error === 'object' &&
@@ -37,8 +41,14 @@ export class UsersService {
     );
   }
 
+  async findByEmail(email: string) {
+    return this.db.user.findUnique({
+      where: { email: this.normalizeEmail(email) },
+    });
+  }
+
   async create(createUserDto: CreateUserDto) {
-    const email = createUserDto.email.trim().toLowerCase();
+    const email = this.normalizeEmail(createUserDto.email);
     const hashedPassword = await hash(createUserDto.password, 10);
 
     const existingUser = await this.db.user.findUnique({
@@ -97,7 +107,9 @@ export class UsersService {
       throw new NotFoundException(`User with id ${id} not found`);
     }
 
-    const normalizedEmail = updateUserDto.email?.trim().toLowerCase();
+    const normalizedEmail = updateUserDto.email
+      ? this.normalizeEmail(updateUserDto.email)
+      : undefined;
 
     if (normalizedEmail) {
       const existingUser = await this.db.user.findFirst({
