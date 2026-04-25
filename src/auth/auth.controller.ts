@@ -6,10 +6,15 @@ import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import type { AuthenticatedUser } from './interfaces/authenticated-user.interface';
+import type { JwtPayload } from './interfaces/jwt-payload.interface';
+import { UsersService } from '../users/users.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly usersService: UsersService,
+  ) {}
 
   @Post('register')
   register(@Body() registerDto: RegisterDto) {
@@ -31,7 +36,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('session')
-  getSession(@User() user: AuthenticatedUser) {
-    return user;
+  getSession(@User() user: JwtPayload) {
+    return this.usersService.findOne(user.sub);
   }
 }
