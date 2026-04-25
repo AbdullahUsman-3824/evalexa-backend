@@ -1,0 +1,75 @@
+model Job {
+    id                  Int             @id @default(autoincrement())
+    companyId           Int
+    createdBy           Int
+    title               String          @db.VarChar(255)
+    description         String          @db.Text
+    jobType             JobType
+    experienceLevel     ExperienceLevel
+    salaryMin           Int
+    salaryMax           Int
+    location            String          @db.VarChar(255)
+    workModel           WorkModel
+    status              JobStatus       @default(DRAFT)
+    applicationDeadline DateTime        @db.Date
+    company             Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+    creator             User            @relation("UserCreatedJobs", fields: [createdBy], references: [id], onDelete: Restrict)
+    jobSkills           JobSkill[]
+    createdAt           DateTime        @default(now()) @db.Timestamptz(6)
+    updatedAt           DateTime        @updatedAt @db.Timestamptz(6)
+
+    @@index([companyId])
+    @@index([createdBy])
+    @@index([status])
+    @@map("jobs")
+}
+
+model Skill {
+    id        Int        @id @default(autoincrement())
+    name      String     @unique @db.VarChar(150)
+    category  String     @db.VarChar(100)
+    jobSkills JobSkill[]
+
+    @@map("skills")
+}
+
+model JobSkill {
+    jobId      Int
+    skillId    Int
+    importance SkillImportance
+    job        Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+    skill      Skill           @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+    @@id([jobId, skillId])
+    @@map("job_skills")
+}
+
+enum JobType {
+    FULL_TIME @map("full-time")
+    PART_TIME @map("part-time")
+    CONTRACT  @map("contract")
+}
+
+enum ExperienceLevel {
+    JUNIOR @map("junior")
+    MID    @map("mid")
+    SENIOR @map("senior")
+    LEAD   @map("lead")
+}
+
+enum WorkModel {
+    REMOTE @map("remote")
+    HYBRID @map("hybrid")
+    ONSITE @map("onsite")
+}
+
+enum JobStatus {
+    OPEN   @map("open")
+    CLOSED @map("closed")
+    DRAFT  @map("draft")
+}
+
+enum SkillImportance {
+    REQUIRED  @map("required")
+    PREFERRED @map("preferred")
+}

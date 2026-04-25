@@ -1,0 +1,39 @@
+model User {
+    id               Int       @id @default(autoincrement())
+    publicId         String    @unique @default(uuid()) @db.Uuid
+    fullName         String    @db.VarChar(150)
+    email            String    @unique @db.VarChar(255)
+    password         String    @db.VarChar(255)
+    phone            String    @db.VarChar(30)
+    role             String    @default("recruiter") @db.VarChar(50)
+    companyId        Int?
+    company          Company?  @relation("CompanyMembers", fields: [companyId], references: [id], onDelete: SetNull)
+    isVerified       Boolean   @default(false)
+    isActive         Boolean   @default(true)
+    lastLogin        DateTime? @db.Timestamptz(6)
+    createdCompanies Company[] @relation("CompanyCreator")
+    createdJobs      Job[]     @relation("UserCreatedJobs")
+    createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+    updatedAt        DateTime  @updatedAt @db.Timestamptz(6)
+
+    @@map("users")
+}
+
+model Company {
+    id          Int      @id @default(autoincrement())
+    name        String   @db.VarChar(150)
+    logo        String?  @db.VarChar(500)
+    industry    String   @db.VarChar(100)
+    companySize String   @db.VarChar(50)
+    website     String?  @db.VarChar(255)
+    location    String   @db.VarChar(255)
+    description String?
+    createdBy   Int
+    creator     User     @relation("CompanyCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+    users       User[]   @relation("CompanyMembers")
+    jobs        Job[]
+    createdAt   DateTime @default(now()) @db.Timestamptz(6)
+    updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+
+    @@map("companies")
+}

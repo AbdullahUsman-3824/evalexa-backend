@@ -28,3 +28,4 @@ lerna-debug.log*
 .tmp
 
 /generated/prisma
+/prisma/migrations
