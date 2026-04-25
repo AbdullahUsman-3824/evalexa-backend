@@ -1,75 +1,92 @@
 model Job {
-    id                  Int             @id @default(autoincrement())
-    companyId           Int
-    createdBy           Int
-    title               String          @db.VarChar(255)
-    description         String          @db.Text
-    jobType             JobType
-    experienceLevel     ExperienceLevel
-    salaryMin           Int
-    salaryMax           Int
-    location            String          @db.VarChar(255)
-    workModel           WorkModel
-    status              JobStatus       @default(DRAFT)
-    applicationDeadline DateTime        @db.Date
-    company             Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
-    creator             User            @relation("UserCreatedJobs", fields: [createdBy], references: [id], onDelete: Restrict)
-    jobSkills           JobSkill[]
-    createdAt           DateTime        @default(now()) @db.Timestamptz(6)
-    updatedAt           DateTime        @updatedAt @db.Timestamptz(6)
+  id                  Int             @id @default(autoincrement())
+  companyId           Int
+  createdBy           Int
+  title               String          @db.VarChar(255)
+  description         String          @db.Text
+  jobType             JobType
+  experienceLevel     ExperienceLevel
+  salaryMin           Int
+  salaryMax           Int
+  location            String          @db.VarChar(255)
+  workModel           WorkModel
+  status              JobStatus       @default(DRAFT)
+  applicationDeadline DateTime        @db.Date
+  company             Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  creator             User            @relation("UserCreatedJobs", fields: [createdBy], references: [id], onDelete: Restrict)
+  aiConfig            JobAiConfig?
+  jobSkills           JobSkill[]
+  createdAt           DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime        @updatedAt @db.Timestamptz(6)
 
-    @@index([companyId])
-    @@index([createdBy])
-    @@index([status])
-    @@map("jobs")
+  @@index([companyId])
+  @@index([createdBy])
+  @@index([status])
+  @@map("jobs")
 }
 
 model Skill {
-    id        Int        @id @default(autoincrement())
-    name      String     @unique @db.VarChar(150)
-    category  String     @db.VarChar(100)
-    jobSkills JobSkill[]
+  id        Int        @id @default(autoincrement())
+  name      String     @unique @db.VarChar(150)
+  category  String     @db.VarChar(100)
+  jobSkills JobSkill[]
 
-    @@map("skills")
+  @@map("skills")
 }
 
 model JobSkill {
-    jobId      Int
-    skillId    Int
-    importance SkillImportance
-    job        Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
-    skill      Skill           @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  jobId      Int
+  skillId    Int
+  importance SkillImportance
+  weight     Int
+  job        Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skill      Skill           @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
-    @@id([jobId, skillId])
-    @@map("job_skills")
+  @@id([jobId, skillId])
+  @@map("job_skills")
+}
+
+model JobAiConfig {
+  id                     Int      @id @default(autoincrement())
+  jobId                  Int      @unique
+  minMatchScore          Int
+  autoShortlistThreshold Int
+  enableAutoShortlist    Boolean
+  enableAiInterview      Boolean
+  aiInterviewThreshold   Int
+  job                    Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  createdAt              DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt              DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("job_ai_config")
 }
 
 enum JobType {
-    FULL_TIME @map("full-time")
-    PART_TIME @map("part-time")
-    CONTRACT  @map("contract")
+  FULL_TIME @map("full-time")
+  PART_TIME @map("part-time")
+  CONTRACT  @map("contract")
 }
 
 enum ExperienceLevel {
-    JUNIOR @map("junior")
-    MID    @map("mid")
-    SENIOR @map("senior")
-    LEAD   @map("lead")
+  JUNIOR @map("junior")
+  MID    @map("mid")
+  SENIOR @map("senior")
+  LEAD   @map("lead")
 }
 
 enum WorkModel {
-    REMOTE @map("remote")
-    HYBRID @map("hybrid")
-    ONSITE @map("onsite")
+  REMOTE @map("remote")
+  HYBRID @map("hybrid")
+  ONSITE @map("onsite")
 }
 
 enum JobStatus {
-    OPEN   @map("open")
-    CLOSED @map("closed")
-    DRAFT  @map("draft")
+  OPEN   @map("open")
+  CLOSED @map("closed")
+  DRAFT  @map("draft")
 }
 
 enum SkillImportance {
-    REQUIRED  @map("required")
-    PREFERRED @map("preferred")
+  REQUIRED  @map("required")
+  PREFERRED @map("preferred")
 }
