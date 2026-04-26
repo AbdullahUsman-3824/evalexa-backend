@@ -15,7 +15,6 @@ export class MailService {
   private readonly smtpHost: string;
   private readonly smtpUser: string;
   private readonly smtpPass: string;
-  private readonly isProduction: boolean;
 
   constructor(private readonly configService: ConfigService) {
     const host = this.configService.get<string>('SMTP_HOST')?.trim();
@@ -26,8 +25,6 @@ export class MailService {
     this.smtpHost = host ?? '';
     this.smtpUser = user ?? '';
     this.smtpPass = pass ?? '';
-    this.isProduction =
-      this.configService.get<string>('NODE_ENV') === 'production';
 
     this.mailFrom =
       this.configService.get<string>('SMTP_FROM') ??
@@ -42,7 +39,7 @@ export class MailService {
     });
   }
 
-  private ensureSmtpConfiguration(): boolean {
+  private ensureSmtpConfiguration(): void {
     const missing: string[] = [];
 
     if (!this.smtpHost) {
@@ -56,28 +53,15 @@ export class MailService {
     }
 
     if (missing.length > 0) {
-      if (!this.isProduction) {
-        this.logger.warn(
-          `SMTP is not configured (${missing.join(', ')}). OTP emails will be logged in development mode.`,
-        );
-        return false;
-      }
 
       throw new ServiceUnavailableException(
         `Email service is not configured. Missing: ${missing.join(', ')}`,
       );
     }
-
-    return true;
   }
 
   async sendVerificationOtp(email: string, otp: string): Promise<void> {
-    const canSendEmail = this.ensureSmtpConfiguration();
-
-    if (!canSendEmail) {
-      this.logger.log(`DEV verification OTP for ${email}: ${otp}`);
-      return;
-    }
+    this.ensureSmtpConfiguration();
 
     try {
       await this.transporter.sendMail({
@@ -101,12 +85,7 @@ export class MailService {
   }
 
   async sendPasswordResetOtp(email: string, otp: string): Promise<void> {
-    const canSendEmail = this.ensureSmtpConfiguration();
-
-    if (!canSendEmail) {
-      this.logger.log(`DEV password reset OTP for ${email}: ${otp}`);
-      return;
-    }
+    this.ensureSmtpConfiguration();
 
     try {
       await this.transporter.sendMail({
