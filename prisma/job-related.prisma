@@ -16,6 +16,8 @@ model Job {
   creator             User            @relation("UserCreatedJobs", fields: [createdBy], references: [id], onDelete: Restrict)
   aiConfig            JobAiConfig?
   jobSkills           JobSkill[]
+  applications        Application[]
+  resumeAnalyses      ResumeAnalysis[]
   createdAt           DateTime        @default(now()) @db.Timestamptz(6)
   updatedAt           DateTime        @updatedAt @db.Timestamptz(6)
 

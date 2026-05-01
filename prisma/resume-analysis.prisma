@@ -1,0 +1,30 @@
+model ResumeAnalysis {
+  id              Int                     @id @default(autoincrement())
+  applicationId   Int                     @map("application_id")
+  jobId           Int                     @map("job_id")
+  skillMatchScore Int?                    @map("skill_match_score")
+  experienceScore Int?                    @map("experience_score")
+  educationScore  Int?                    @map("education_score")
+  overallScore    Int?                    @map("overall_score")
+  matchedSkills   Json?                   @map("matched_skills")
+  missingSkills   Json?                   @map("missing_skills")
+  strengths       Json?
+  weaknesses      Json?
+  aiSummary       String?                 @map("ai_summary") @db.Text
+  recommendation  AnalysisRecommendation?
+  modelVersion    String?                 @map("model_version") @db.VarChar(50)
+  analysisVersion Int                     @default(1) @map("analysis_version")
+  analyzedAt      DateTime                @default(now()) @map("analyzed_at") @db.Timestamptz(6)
+  application     Application             @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  job             Job                     @relation(fields: [jobId], references: [id], onDelete: Restrict)
+
+  @@index([applicationId])
+  @@index([jobId])
+  @@map("resume_analysis")
+}
+
+enum AnalysisRecommendation {
+  REJECT    @map("reject")
+  REVIEW    @map("review")
+  SHORTLIST @map("shortlist")
+}

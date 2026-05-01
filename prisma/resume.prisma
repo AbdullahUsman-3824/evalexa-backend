@@ -1,0 +1,26 @@
+model Resume {
+  id                  Int                 @id @default(autoincrement())
+  candidateId         Int                 @map("candidate_id")
+  resumeUrl           String              @map("resume_url") @db.Text
+  fileName            String?             @map("file_name") @db.VarChar(255)
+  keywords            Json?               @map("keywords")
+  description         String?             @db.Text
+  parsedData          Json?               @map("parsed_data")
+  extractedSkills     Json?               @map("extracted_skills")
+  extractedExperience Int?                @map("extracted_experience")
+  extractedEducation  String?             @map("extracted_education") @db.VarChar(255)
+  uploadSource        ResumeUploadSource? @map("upload_source")
+  isPrimary           Boolean             @map("is_primary") @default(false)
+  uploadedAt          DateTime            @map("uploaded_at") @default(now()) @db.Timestamptz(6)
+  candidate           Candidate           @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  applications        Application[]
+
+  @@index([candidateId])
+  @@map("resume")
+}
+
+enum ResumeUploadSource {
+  CANDIDATE       @map("candidate")
+  RECRUITER_BULK  @map("recruiter_bulk")
+  RECRUITER_MANUAL @map("recruiter_manual")
+}

@@ -1,0 +1,48 @@
+model Application {
+  id                Int               @id @default(autoincrement())
+  candidateId       Int               @map("candidate_id")
+  jobId             Int               @map("job_id")
+  companyId         Int               @map("company_id")
+  resumeId          Int               @map("resume_id")
+  source            ApplicationSource @default(JOB_PAGE)
+  status            ApplicationStatus @default(APPLIED)
+  screeningStage    ScreeningStage    @default(NOT_STARTED) @map("screening_stage")
+  matchScore        Int?              @map("match_score")
+  rankPosition      Int?              @map("rank_position")
+  isAutoShortlisted Boolean           @default(false) @map("is_auto_shortlisted")
+  appliedAt         DateTime          @default(now()) @map("applied_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  candidate         Candidate         @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  job               Job               @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  resume            Resume            @relation(fields: [resumeId], references: [id], onDelete: Restrict)
+  resumeAnalyses    ResumeAnalysis[]
+
+  @@index([candidateId])
+  @@index([jobId])
+  @@index([companyId])
+  @@index([resumeId])
+  @@map("application")
+}
+
+enum ApplicationSource {
+  JOB_PAGE    @map("job_page")
+  BULK_UPLOAD @map("bulk_upload")
+  MANUAL      @map("manual")
+}
+
+enum ApplicationStatus {
+  APPLIED     @map("applied")
+  SCREENING   @map("screening")
+  SHORTLISTED @map("shortlisted")
+  INTERVIEW   @map("interview")
+  OFFER       @map("offer")
+  REJECTED    @map("rejected")
+  HIRED       @map("hired")
+}
+
+enum ScreeningStage {
+  NOT_STARTED @map("not_started")
+  IN_PROGRESS @map("in_progress")
+  COMPLETED   @map("completed")
+}

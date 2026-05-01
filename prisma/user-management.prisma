@@ -71,6 +71,7 @@ model Company {
   creator     User     @relation("CompanyCreator", fields: [createdBy], references: [id], onDelete: Restrict)
   users       User[]   @relation("CompanyMembers")
   jobs        Job[]
+  applications Application[]
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @db.Timestamptz(6)
 

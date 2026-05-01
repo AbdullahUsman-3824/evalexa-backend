@@ -1,0 +1,22 @@
+model Candidate {
+  id           Int               @id @default(autoincrement())
+  fullName     String            @map("full_name") @db.VarChar(255)
+  email        String?           @db.VarChar(255)
+  phone        String?           @db.VarChar(50)
+  linkedinUrl  String?           @map("linkedin_url") @db.VarChar(255)
+  portfolioUrl String?           @map("portfolio_url") @db.VarChar(255)
+  location     String?           @db.VarChar(255)
+  source       CandidateSource   @default(JOB_PAGE)
+  resumes      Resume[]
+  applications Application[]
+  createdAt    DateTime          @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime          @map("updated_at") @updatedAt @db.Timestamptz(6)
+
+  @@map("candidate")
+}
+
+enum CandidateSource {
+  JOB_PAGE     @map("job_page")
+  BULK_UPLOAD  @map("bulk_upload")
+  MANUAL_ENTRY @map("manual_entry")
+}
