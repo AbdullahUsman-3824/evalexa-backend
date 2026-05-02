@@ -43,22 +43,29 @@ describe('UsersController', () => {
   });
 
   it('findOne delegates numeric id to service', async () => {
-    await controller.findOne(7);
+    await controller.findOne('11111111-1111-1111-1111-111111111111');
 
-    expect(usersService.findOne).toHaveBeenCalledWith(7);
+    expect(usersService.findOne).toHaveBeenCalledWith(
+      '11111111-1111-1111-1111-111111111111',
+    );
   });
 
   it('update delegates id and dto to service', async () => {
     const dto = { fullName: 'Updated Name' };
 
-    await controller.update(9, dto);
+    await controller.update('22222222-2222-2222-2222-222222222222', dto);
 
-    expect(usersService.update).toHaveBeenCalledWith(9, dto);
+    expect(usersService.update).toHaveBeenCalledWith(
+      '22222222-2222-2222-2222-222222222222',
+      dto,
+    );
   });
 
   it('remove delegates numeric id to service', async () => {
-    await controller.remove(3);
+    await controller.remove('33333333-3333-3333-3333-333333333333');
 
-    expect(usersService.remove).toHaveBeenCalledWith(3);
+    expect(usersService.remove).toHaveBeenCalledWith(
+      '33333333-3333-3333-3333-333333333333',
+    );
   });
 });

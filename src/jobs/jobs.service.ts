@@ -74,7 +74,7 @@ const jobSelect = {
 export class JobsService {
   constructor(private readonly db: DatabaseService) {}
 
-  private requireCompanyId(companyId: number | null | undefined): number {
+  private requireCompanyId(companyId: string | null | undefined): string {
     if (!companyId) {
       throw new BadRequestException(
         'Recruiter must have a company before posting jobs',
@@ -84,7 +84,7 @@ export class JobsService {
     return companyId;
   }
 
-  private async ensureSkillsExist(skillIds: number[]) {
+  private async ensureSkillsExist(skillIds: string[]) {
     const uniqueSkillIds = [...new Set(skillIds)];
     const existingSkills = await this.db.skill.findMany({
       where: { id: { in: uniqueSkillIds } },
@@ -121,7 +121,7 @@ export class JobsService {
     }>,
   ): Promise<
     Array<{
-      skillId: number;
+      skillId: string;
       importance: SkillImportance;
       weight: number;
     }>
@@ -260,8 +260,8 @@ export class JobsService {
   }
 
   async create(
-    userId: number,
-    companyId: number | null | undefined,
+    userId: string,
+    companyId: string | null | undefined,
     dto: CreateJobDto,
   ) {
     this.validateSalaryRange(dto.salaryMin, dto.salaryMax);
@@ -301,7 +301,7 @@ export class JobsService {
     });
   }
 
-  async findAll(companyId: number | null | undefined, query: FindJobsQueryDto) {
+  async findAll(companyId: string | null | undefined, query: FindJobsQueryDto) {
     const ownedCompanyId = this.requireCompanyId(companyId);
 
     const where: Prisma.JobWhereInput = {
@@ -337,7 +337,7 @@ export class JobsService {
     });
   }
 
-  async findOne(companyId: number | null | undefined, id: number) {
+  async findOne(companyId: string | null | undefined, id: string) {
     const ownedCompanyId = this.requireCompanyId(companyId);
 
     const job = await this.db.job.findFirst({
@@ -356,9 +356,9 @@ export class JobsService {
   }
 
   async update(
-    userId: number,
-    companyId: number | null | undefined,
-    id: number,
+    userId: string,
+    companyId: string | null | undefined,
+    id: string,
     dto: UpdateJobDto,
   ) {
     const ownedCompanyId = this.requireCompanyId(companyId);

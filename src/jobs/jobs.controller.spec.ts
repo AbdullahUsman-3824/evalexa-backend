@@ -28,9 +28,9 @@ describe('JobsController', () => {
 
   it('create forwards authenticated user data and dto to the service', async () => {
     const user: JwtPayload = {
-      sub: 7,
+      sub: '11111111-1111-1111-1111-111111111111',
       email: 'recruiter@example.com',
-      companyId: 4,
+      companyId: '44444444-4444-4444-4444-444444444444',
     };
     const dto = {
       title: 'Backend Engineer',
@@ -54,44 +54,63 @@ describe('JobsController', () => {
 
     await controller.create(user, dto as never);
 
-    expect(jobsService.create).toHaveBeenCalledWith(7, 4, dto);
+    expect(jobsService.create).toHaveBeenCalledWith(
+      '11111111-1111-1111-1111-111111111111',
+      '44444444-4444-4444-4444-444444444444',
+      dto,
+    );
   });
 
   it('findAll forwards company id and query to the service', async () => {
     const user: JwtPayload = {
-      sub: 7,
+      sub: '11111111-1111-1111-1111-111111111111',
       email: 'recruiter@example.com',
-      companyId: 4,
+      companyId: '44444444-4444-4444-4444-444444444444',
     };
     const query = { status: 'draft', sortBy: 'newest' };
 
     await controller.findAll(user, query as never);
 
-    expect(jobsService.findAll).toHaveBeenCalledWith(4, query);
+    expect(jobsService.findAll).toHaveBeenCalledWith(
+      '44444444-4444-4444-4444-444444444444',
+      query,
+    );
   });
 
   it('findOne forwards company id and job id to the service', async () => {
     const user: JwtPayload = {
-      sub: 7,
+      sub: '11111111-1111-1111-1111-111111111111',
       email: 'recruiter@example.com',
-      companyId: 4,
+      companyId: '44444444-4444-4444-4444-444444444444',
     };
 
-    await controller.findOne(user, 12);
+    await controller.findOne(user, '55555555-5555-5555-5555-555555555555');
 
-    expect(jobsService.findOne).toHaveBeenCalledWith(4, 12);
+    expect(jobsService.findOne).toHaveBeenCalledWith(
+      '44444444-4444-4444-4444-444444444444',
+      '55555555-5555-5555-5555-555555555555',
+    );
   });
 
   it('update forwards authenticated user data, job id and dto to the service', async () => {
     const user: JwtPayload = {
-      sub: 7,
+      sub: '11111111-1111-1111-1111-111111111111',
       email: 'recruiter@example.com',
-      companyId: 4,
+      companyId: '44444444-4444-4444-4444-444444444444',
     };
     const dto = { status: 'open' };
 
-    await controller.update(user, 12, dto as never);
+    await controller.update(
+      user,
+      '55555555-5555-5555-5555-555555555555',
+      dto as never,
+    );
 
-    expect(jobsService.update).toHaveBeenCalledWith(7, 4, 12, dto);
+    expect(jobsService.update).toHaveBeenCalledWith(
+      '11111111-1111-1111-1111-111111111111',
+      '44444444-4444-4444-4444-444444444444',
+      '55555555-5555-5555-5555-555555555555',
+      dto,
+    );
   });
 });

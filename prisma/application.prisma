@@ -1,9 +1,9 @@
 model Application {
-  id                Int               @id @default(autoincrement())
-  candidateId       Int               @map("candidate_id")
-  jobId             Int               @map("job_id")
-  companyId         Int               @map("company_id")
-  resumeId          Int               @map("resume_id")
+  id                String            @id @default(uuid()) @db.Uuid
+  candidateId       String            @map("candidate_id") @db.Uuid
+  jobId             String            @map("job_id") @db.Uuid
+  companyId         String            @map("company_id") @db.Uuid
+  resumeId          String            @map("resume_id") @db.Uuid
   source            ApplicationSource @default(JOB_PAGE)
   status            ApplicationStatus @default(APPLIED)
   screeningStage    ScreeningStage    @default(NOT_STARTED) @map("screening_stage")

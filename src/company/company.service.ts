@@ -30,7 +30,7 @@ export class CompanyService {
     private readonly usersService: UsersService,
   ) {}
 
-  async create(userId: number, dto: CreateCompanyDto) {
+  async create(userId: string, dto: CreateCompanyDto) {
     const recruiter = await this.usersService.findOne(userId);
 
     if (recruiter.companyId) {
@@ -55,7 +55,7 @@ export class CompanyService {
     });
   }
 
-  async findAll(userId: number) {
+  async findAll(userId: string) {
     return this.db.company.findMany({
       where: { createdBy: userId },
       orderBy: { createdAt: 'desc' },
@@ -63,7 +63,7 @@ export class CompanyService {
     });
   }
 
-  async findOne(userId: number, id: number) {
+  async findOne(userId: string, id: string) {
     const company = await this.db.company.findFirst({
       where: {
         id,
@@ -79,7 +79,7 @@ export class CompanyService {
     return company;
   }
 
-  async update(userId: number, id: number, dto: UpdateCompanyDto) {
+  async update(userId: string, id: string, dto: UpdateCompanyDto) {
     const updateResult = await this.db.company.updateMany({
       where: {
         id,
@@ -107,7 +107,7 @@ export class CompanyService {
     return company;
   }
 
-  async remove(userId: number, id: number) {
+  async remove(userId: string, id: string) {
     return this.db.$transaction(async (tx) => {
       const company = await tx.company.findFirst({
         where: {

@@ -1,7 +1,7 @@
 model ResumeAnalysis {
-  id              Int                     @id @default(autoincrement())
-  applicationId   Int                     @map("application_id")
-  jobId           Int                     @map("job_id")
+  id              String                  @id @default(uuid()) @db.Uuid
+  applicationId   String                  @map("application_id") @db.Uuid
+  jobId           String                  @map("job_id") @db.Uuid
   skillMatchScore Int?                    @map("skill_match_score")
   experienceScore Int?                    @map("experience_score")
   educationScore  Int?                    @map("education_score")

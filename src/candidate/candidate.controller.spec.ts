@@ -32,13 +32,23 @@ describe('CandidateController', () => {
   });
 
   it('getCandidateProfile forwards id to service', async () => {
-    await controller.getCandidateProfile(12);
-    expect(candidateService.getCandidateProfile).toHaveBeenCalledWith(12);
+    await controller.getCandidateProfile(
+      'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    );
+    expect(candidateService.getCandidateProfile).toHaveBeenCalledWith(
+      'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    );
   });
 
   it('updateCandidate forwards id and dto to service', async () => {
     const dto = { fullName: 'Updated' } as any;
-    await controller.updateCandidate(3, dto);
-    expect(candidateService.updateCandidate).toHaveBeenCalledWith(3, dto);
+    await controller.updateCandidate(
+      'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+      dto,
+    );
+    expect(candidateService.updateCandidate).toHaveBeenCalledWith(
+      'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+      dto,
+    );
   });
 });

@@ -39,14 +39,17 @@ describe('CandidateService', () => {
     } as any;
 
     dbMock.candidate.findFirst.mockResolvedValue({
-      id: 1,
+      id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
       fullName: 'Alice Doe',
     });
 
     const res = await service.createCandidate(dto);
 
     expect(dbMock.candidate.findFirst).toHaveBeenCalled();
-    expect(res).toEqual({ id: 1, fullName: 'Alice Doe' });
+    expect(res).toEqual({
+      id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      fullName: 'Alice Doe',
+    });
   });
 
   it('createCandidate creates when not existing', async () => {
@@ -56,14 +59,20 @@ describe('CandidateService', () => {
     } as any;
 
     dbMock.candidate.findFirst.mockResolvedValue(null);
-    dbMock.candidate.create.mockResolvedValue({ id: 2, fullName: 'Bob Smith' });
+    dbMock.candidate.create.mockResolvedValue({
+      id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+      fullName: 'Bob Smith',
+    });
 
     const res = await service.createCandidate(dto);
 
     expect(dbMock.candidate.create).toHaveBeenCalledWith(
       expect.objectContaining({ select: expect.any(Object) }),
     );
-    expect(res).toEqual({ id: 2, fullName: 'Bob Smith' });
+    expect(res).toEqual({
+      id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+      fullName: 'Bob Smith',
+    });
   });
 
   it('findByEmail returns null when email missing', async () => {
@@ -74,30 +83,46 @@ describe('CandidateService', () => {
   it('getCandidateProfile throws NotFoundException when missing', async () => {
     dbMock.candidate.findUnique.mockResolvedValue(null);
 
-    await expect(service.getCandidateProfile(9)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.getCandidateProfile('cccccccc-cccc-cccc-cccc-cccccccccccc'),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('updateCandidate throws NotFoundException when id not found', async () => {
     dbMock.candidate.findUnique.mockResolvedValue(null);
 
-    await expect(service.updateCandidate(5, {} as any)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.updateCandidate(
+        'dddddddd-dddd-dddd-dddd-dddddddddddd',
+        {} as any,
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('updateCandidate calls update and returns selected fields', async () => {
-    dbMock.candidate.findUnique.mockResolvedValue({ id: 5 });
-    dbMock.candidate.update.mockResolvedValue({ id: 5, fullName: 'Updated' });
-
-    const res = await service.updateCandidate(5, {
+    dbMock.candidate.findUnique.mockResolvedValue({
+      id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+    });
+    dbMock.candidate.update.mockResolvedValue({
+      id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
       fullName: 'Updated',
-    } as any);
+    });
+
+    const res = await service.updateCandidate(
+      'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+      {
+        fullName: 'Updated',
+      } as any,
+    );
 
     expect(dbMock.candidate.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 5 } }),
+      expect.objectContaining({
+        where: { id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee' },
+      }),
     );
-    expect(res).toEqual({ id: 5, fullName: 'Updated' });
+    expect(res).toEqual({
+      id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+      fullName: 'Updated',
+    });
   });
 });

@@ -1,12 +1,12 @@
 model User {
-  id               Int               @id @default(autoincrement())
+  id               String            @id @default(uuid()) @db.Uuid
   // publicId         String    @unique @default(uuid()) @db.Uuid
   fullName         String            @db.VarChar(150)
   email            String            @unique @db.VarChar(255)
   password         String            @db.VarChar(255)
   phone            String            @db.VarChar(30)
   role             String            @default("recruiter") @db.VarChar(50)
-  companyId        Int?
+  companyId        String?           @db.Uuid
   company          Company?          @relation("CompanyMembers", fields: [companyId], references: [id], onDelete: SetNull)
   passwordResetOtp PasswordResetOtp?
   isVerified       Boolean           @default(false)
@@ -21,7 +21,7 @@ model User {
 }
 
 model PendingUserRegistration {
-  id                   Int                   @id @default(autoincrement())
+  id                   String                @id @default(uuid()) @db.Uuid
   fullName             String                @db.VarChar(150)
   email                String                @unique @db.VarChar(255)
   passwordHash         String                @db.VarChar(255)
@@ -35,8 +35,8 @@ model PendingUserRegistration {
 }
 
 model EmailVerificationOtp {
-  id                        Int                     @id @default(autoincrement())
-  pendingUserRegistrationId Int                     @unique
+  id                        String                  @id @default(uuid()) @db.Uuid
+  pendingUserRegistrationId String                  @unique @db.Uuid
   otpHash                   String                  @db.VarChar(255)
   expiresAt                 DateTime                @db.Timestamptz(6)
   createdAt                 DateTime                @default(now()) @db.Timestamptz(6)
@@ -47,8 +47,8 @@ model EmailVerificationOtp {
 }
 
 model PasswordResetOtp {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @unique
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @db.Uuid
   otpHash   String   @db.VarChar(255)
   expiresAt DateTime @db.Timestamptz(6)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
@@ -59,7 +59,7 @@ model PasswordResetOtp {
 }
 
 model Company {
-  id          Int      @id @default(autoincrement())
+  id          String   @id @default(uuid()) @db.Uuid
   name        String   @db.VarChar(150)
   logo        String?  @db.VarChar(500)
   industry    String   @db.VarChar(100)
@@ -67,7 +67,7 @@ model Company {
   website     String?  @db.VarChar(255)
   location    String   @db.VarChar(255)
   description String?
-  createdBy   Int
+  createdBy   String   @db.Uuid
   creator     User     @relation("CompanyCreator", fields: [createdBy], references: [id], onDelete: Restrict)
   users       User[]   @relation("CompanyMembers")
   jobs        Job[]

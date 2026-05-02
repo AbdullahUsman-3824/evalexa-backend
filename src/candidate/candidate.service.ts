@@ -87,7 +87,7 @@ export class CandidateService {
     });
   }
 
-  async getCandidateProfile(id: number) {
+  async getCandidateProfile(id: string) {
     const candidate = await this.db.candidate.findUnique({
       where: { id },
       select: this.candidateProfileSelect,
@@ -100,7 +100,7 @@ export class CandidateService {
     return candidate;
   }
 
-  async updateCandidate(id: number, dto: UpdateCandidateDto) {
+  async updateCandidate(id: string, dto: UpdateCandidateDto) {
     const candidate = await this.db.candidate.findUnique({
       where: { id },
       select: { id: true },

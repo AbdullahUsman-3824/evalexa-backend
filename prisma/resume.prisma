@@ -1,6 +1,6 @@
 model Resume {
-  id                  Int                 @id @default(autoincrement())
-  candidateId         Int                 @map("candidate_id")
+  id                  String              @id @default(uuid()) @db.Uuid
+  candidateId         String              @map("candidate_id") @db.Uuid
   resumeUrl           String              @map("resume_url") @db.Text
   fileName            String?             @map("file_name") @db.VarChar(255)
   keywords            Json?               @map("keywords")

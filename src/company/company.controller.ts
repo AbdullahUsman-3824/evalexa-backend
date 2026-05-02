@@ -4,7 +4,6 @@ import {
   Delete,
   Get,
   Param,
-  ParseIntPipe,
   Patch,
   Post,
   UseGuards,
@@ -33,21 +32,21 @@ export class CompanyController {
   }
 
   @Get(':id')
-  findOne(@User() user: JwtPayload, @Param('id', ParseIntPipe) id: number) {
+  findOne(@User() user: JwtPayload, @Param('id') id: string) {
     return this.companyService.findOne(user.sub, id);
   }
 
   @Patch(':id')
   update(
     @User() user: JwtPayload,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Body() dto: UpdateCompanyDto,
   ) {
     return this.companyService.update(user.sub, id, dto);
   }
 
   @Delete(':id')
-  remove(@User() user: JwtPayload, @Param('id', ParseIntPipe) id: number) {
+  remove(@User() user: JwtPayload, @Param('id') id: string) {
     return this.companyService.remove(user.sub, id);
   }
 }

@@ -84,7 +84,7 @@ export class UsersService {
     });
   }
 
-  async findOne(id: number) {
+  async findOne(id: string) {
     const user = await this.db.user.findUnique({
       where: { id },
       select: userPublicSelect,
@@ -97,7 +97,7 @@ export class UsersService {
     return user;
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto) {
+  async update(id: string, updateUserDto: UpdateUserDto) {
     const user = await this.db.user.findUnique({
       where: { id },
       select: { id: true },
@@ -150,7 +150,7 @@ export class UsersService {
     }
   }
 
-  async remove(id: number) {
+  async remove(id: string) {
     const user = await this.db.user.findUnique({
       where: { id },
       select: { id: true },

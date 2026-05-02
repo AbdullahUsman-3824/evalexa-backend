@@ -31,7 +31,10 @@ describe('CompanyController', () => {
   });
 
   it('create delegates authenticated user id and dto to service', async () => {
-    const user: JwtPayload = { sub: 7, email: 'r@evalexa.com' };
+    const user: JwtPayload = {
+      sub: '11111111-1111-1111-1111-111111111111',
+      email: 'r@evalexa.com',
+    };
     const dto = {
       name: 'Acme Inc',
       industry: 'Technology',
@@ -41,39 +44,66 @@ describe('CompanyController', () => {
 
     await controller.create(user, dto);
 
-    expect(companyService.create).toHaveBeenCalledWith(7, dto);
+    expect(companyService.create).toHaveBeenCalledWith(
+      '11111111-1111-1111-1111-111111111111',
+      dto,
+    );
   });
 
   it('findAll delegates authenticated user id to service', async () => {
-    const user: JwtPayload = { sub: 11, email: 'r@evalexa.com' };
+    const user: JwtPayload = {
+      sub: '22222222-2222-2222-2222-222222222222',
+      email: 'r@evalexa.com',
+    };
 
     await controller.findAll(user);
 
-    expect(companyService.findAll).toHaveBeenCalledWith(11);
+    expect(companyService.findAll).toHaveBeenCalledWith(
+      '22222222-2222-2222-2222-222222222222',
+    );
   });
 
   it('findOne delegates authenticated user id and company id', async () => {
-    const user: JwtPayload = { sub: 11, email: 'r@evalexa.com' };
+    const user: JwtPayload = {
+      sub: '22222222-2222-2222-2222-222222222222',
+      email: 'r@evalexa.com',
+    };
 
-    await controller.findOne(user, 9);
+    await controller.findOne(user, '33333333-3333-3333-3333-333333333333');
 
-    expect(companyService.findOne).toHaveBeenCalledWith(11, 9);
+    expect(companyService.findOne).toHaveBeenCalledWith(
+      '22222222-2222-2222-2222-222222222222',
+      '33333333-3333-3333-3333-333333333333',
+    );
   });
 
   it('update delegates authenticated user id, company id and dto', async () => {
-    const user: JwtPayload = { sub: 11, email: 'r@evalexa.com' };
+    const user: JwtPayload = {
+      sub: '22222222-2222-2222-2222-222222222222',
+      email: 'r@evalexa.com',
+    };
     const dto = { name: 'Renamed' };
 
-    await controller.update(user, 9, dto);
+    await controller.update(user, '33333333-3333-3333-3333-333333333333', dto);
 
-    expect(companyService.update).toHaveBeenCalledWith(11, 9, dto);
+    expect(companyService.update).toHaveBeenCalledWith(
+      '22222222-2222-2222-2222-222222222222',
+      '33333333-3333-3333-3333-333333333333',
+      dto,
+    );
   });
 
   it('remove delegates authenticated user id and company id', async () => {
-    const user: JwtPayload = { sub: 11, email: 'r@evalexa.com' };
+    const user: JwtPayload = {
+      sub: '22222222-2222-2222-2222-222222222222',
+      email: 'r@evalexa.com',
+    };
 
-    await controller.remove(user, 9);
+    await controller.remove(user, '33333333-3333-3333-3333-333333333333');
 
-    expect(companyService.remove).toHaveBeenCalledWith(11, 9);
+    expect(companyService.remove).toHaveBeenCalledWith(
+      '22222222-2222-2222-2222-222222222222',
+      '33333333-3333-3333-3333-333333333333',
+    );
   });
 });

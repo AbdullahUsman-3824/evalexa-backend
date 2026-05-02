@@ -1,7 +1,7 @@
 model Job {
-  id                  Int             @id @default(autoincrement())
-  companyId           Int
-  createdBy           Int
+  id                  String          @id @default(uuid()) @db.Uuid
+  companyId           String          @db.Uuid
+  createdBy           String          @db.Uuid
   title               String          @db.VarChar(255)
   description         String          @db.Text
   jobType             JobType
@@ -28,7 +28,7 @@ model Job {
 }
 
 model Skill {
-  id        Int        @id @default(autoincrement())
+  id        String     @id @default(uuid()) @db.Uuid
   name      String     @unique @db.VarChar(150)
   category  String     @db.VarChar(100)
   jobSkills JobSkill[]
@@ -37,8 +37,8 @@ model Skill {
 }
 
 model JobSkill {
-  jobId      Int
-  skillId    Int
+  jobId      String     @map("job_id") @db.Uuid
+  skillId    String     @map("skill_id") @db.Uuid
   importance SkillImportance
   weight     Int
   job        Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
@@ -49,8 +49,8 @@ model JobSkill {
 }
 
 model JobAiConfig {
-  id                     Int      @id @default(autoincrement())
-  jobId                  Int      @unique
+  id                     String   @id @default(uuid()) @db.Uuid
+  jobId                  String   @unique @db.Uuid
   minMatchScore          Int
   autoShortlistThreshold Int
   enableAutoShortlist    Boolean

@@ -14,11 +14,11 @@ import type { JwtPayload } from './interfaces/jwt-payload.interface';
 import { MailService } from './mail.service';
 
 type LoginUserResponse = {
-  id: number;
+  id: string;
   fullName: string;
   email: string;
   role: string;
-  companyId: number | null;
+  companyId: string | null;
   isVerified: boolean;
   isActive: boolean;
 };
@@ -43,7 +43,7 @@ export class AuthService {
   }
 
   private async storeUserOtp(
-    pendingUserRegistrationId: number,
+    pendingUserRegistrationId: string,
     otp: string,
   ): Promise<Date> {
     const expiresAt = new Date(Date.now() + this.otpTtlMs);

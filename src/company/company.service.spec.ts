@@ -75,10 +75,13 @@ describe('CompanyService', () => {
   });
 
   it('create throws ConflictException when recruiter already has a company', async () => {
-    usersService.findOne.mockResolvedValue({ id: 1, companyId: 17 });
+    usersService.findOne.mockResolvedValue({
+      id: '11111111-1111-1111-1111-111111111111',
+      companyId: '22222222-2222-2222-2222-222222222222',
+    });
 
     await expect(
-      service.create(1, {
+      service.create('11111111-1111-1111-1111-111111111111', {
         name: 'Acme Inc',
         industry: 'Technology',
         companySize: '11-50',
@@ -88,9 +91,18 @@ describe('CompanyService', () => {
   });
 
   it('create stores company and links recruiter in the same transaction', async () => {
-    usersService.findOne.mockResolvedValue({ id: 1, companyId: null });
-    dbMock.company.create.mockResolvedValue({ id: 22, name: 'Acme Inc' });
-    dbMock.user.update.mockResolvedValue({ id: 1, companyId: 22 });
+    usersService.findOne.mockResolvedValue({
+      id: '11111111-1111-1111-1111-111111111111',
+      companyId: null,
+    });
+    dbMock.company.create.mockResolvedValue({
+      id: '22222222-2222-2222-2222-222222222222',
+      name: 'Acme Inc',
+    });
+    dbMock.user.update.mockResolvedValue({
+      id: '11111111-1111-1111-1111-111111111111',
+      companyId: '22222222-2222-2222-2222-222222222222',
+    });
 
     const dto = {
       name: 'Acme Inc',
@@ -102,13 +114,16 @@ describe('CompanyService', () => {
       description: 'Hiring top engineers',
     };
 
-    const result = await service.create(1, dto);
+    const result = await service.create(
+      '11111111-1111-1111-1111-111111111111',
+      dto,
+    );
 
     expect(dbMock.$transaction).toHaveBeenCalled();
     expect(dbMock.company.create).toHaveBeenCalledWith({
       data: {
         ...dto,
-        createdBy: 1,
+        createdBy: '11111111-1111-1111-1111-111111111111',
       },
       select: expect.objectContaining({
         id: true,
@@ -117,90 +132,139 @@ describe('CompanyService', () => {
       }),
     });
     expect(dbMock.user.update).toHaveBeenCalledWith({
-      where: { id: 1 },
-      data: { companyId: 22 },
+      where: { id: '11111111-1111-1111-1111-111111111111' },
+      data: { companyId: '22222222-2222-2222-2222-222222222222' },
     });
-    expect(result).toEqual({ id: 22, name: 'Acme Inc' });
+    expect(result).toEqual({
+      id: '22222222-2222-2222-2222-222222222222',
+      name: 'Acme Inc',
+    });
   });
 
   it('findAll scopes companies by creator', async () => {
     dbMock.company.findMany.mockResolvedValue([]);
 
-    await service.findAll(3);
+    await service.findAll('33333333-3333-3333-3333-333333333333');
 
     expect(dbMock.company.findMany).toHaveBeenCalledWith({
-      where: { createdBy: 3 },
+      where: { createdBy: '33333333-3333-3333-3333-333333333333' },
       orderBy: { createdAt: 'desc' },
       select: expect.objectContaining({ id: true, name: true }),
     });
   });
 
   it('findOne returns company when it exists for requester', async () => {
-    dbMock.company.findFirst.mockResolvedValue({ id: 4, name: 'Globex' });
+    dbMock.company.findFirst.mockResolvedValue({
+      id: '44444444-4444-4444-4444-444444444444',
+      name: 'Globex',
+    });
 
-    const result = await service.findOne(9, 4);
+    const result = await service.findOne(
+      '99999999-9999-9999-9999-999999999999',
+      '44444444-4444-4444-4444-444444444444',
+    );
 
-    expect(result).toEqual({ id: 4, name: 'Globex' });
+    expect(result).toEqual({
+      id: '44444444-4444-4444-4444-444444444444',
+      name: 'Globex',
+    });
   });
 
   it('findOne throws NotFoundException when company is missing', async () => {
     dbMock.company.findFirst.mockResolvedValue(null);
 
-    await expect(service.findOne(9, 404)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.findOne(
+        '99999999-9999-9999-9999-999999999999',
+        'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('update throws NotFoundException when no owned record is updated', async () => {
     dbMock.company.updateMany.mockResolvedValue({ count: 0 });
 
     await expect(
-      service.update(7, 101, { name: 'New Name' }),
+      service.update(
+        '77777777-7777-7777-7777-777777777777',
+        '10101010-1010-1010-1010-101010101010',
+        { name: 'New Name' },
+      ),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('update persists dto and returns refreshed company', async () => {
     dbMock.company.updateMany.mockResolvedValue({ count: 1 });
-    dbMock.company.findFirst.mockResolvedValue({ id: 5, name: 'Updated Co' });
+    dbMock.company.findFirst.mockResolvedValue({
+      id: '55555555-5555-5555-5555-555555555555',
+      name: 'Updated Co',
+    });
 
     const dto = { name: 'Updated Co', location: 'Karachi' };
-    const result = await service.update(7, 5, dto);
+    const result = await service.update(
+      '77777777-7777-7777-7777-777777777777',
+      '55555555-5555-5555-5555-555555555555',
+      dto,
+    );
 
     expect(dbMock.company.updateMany).toHaveBeenCalledWith({
-      where: { id: 5, createdBy: 7 },
+      where: {
+        id: '55555555-5555-5555-5555-555555555555',
+        createdBy: '77777777-7777-7777-7777-777777777777',
+      },
       data: dto,
     });
     expect(dbMock.company.findFirst).toHaveBeenCalledWith({
-      where: { id: 5, createdBy: 7 },
+      where: {
+        id: '55555555-5555-5555-5555-555555555555',
+        createdBy: '77777777-7777-7777-7777-777777777777',
+      },
       select: expect.objectContaining({ id: true, name: true }),
     });
-    expect(result).toEqual({ id: 5, name: 'Updated Co' });
+    expect(result).toEqual({
+      id: '55555555-5555-5555-5555-555555555555',
+      name: 'Updated Co',
+    });
   });
 
   it('remove throws NotFoundException when company does not exist', async () => {
     dbMock.company.findFirst.mockResolvedValue(null);
 
-    await expect(service.remove(8, 77)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.remove(
+        '88888888-8888-8888-8888-888888888888',
+        '77777777-7777-7777-7777-777777777777',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(dbMock.user.updateMany).not.toHaveBeenCalled();
     expect(dbMock.company.delete).not.toHaveBeenCalled();
   });
 
   it('remove unlinks users and deletes owned company', async () => {
-    dbMock.company.findFirst.mockResolvedValue({ id: 12, name: 'Delete Me' });
+    dbMock.company.findFirst.mockResolvedValue({
+      id: '12121212-1212-1212-1212-121212121212',
+      name: 'Delete Me',
+    });
     dbMock.user.updateMany.mockResolvedValue({ count: 3 });
-    dbMock.company.delete.mockResolvedValue({ id: 12 });
+    dbMock.company.delete.mockResolvedValue({
+      id: '12121212-1212-1212-1212-121212121212',
+    });
 
-    const result = await service.remove(8, 12);
+    const result = await service.remove(
+      '88888888-8888-8888-8888-888888888888',
+      '12121212-1212-1212-1212-121212121212',
+    );
 
     expect(dbMock.user.updateMany).toHaveBeenCalledWith({
-      where: { companyId: 12 },
+      where: { companyId: '12121212-1212-1212-1212-121212121212' },
       data: { companyId: null },
     });
     expect(dbMock.company.delete).toHaveBeenCalledWith({
-      where: { id: 12 },
+      where: { id: '12121212-1212-1212-1212-121212121212' },
     });
-    expect(result).toEqual({ id: 12, name: 'Delete Me' });
+    expect(result).toEqual({
+      id: '12121212-1212-1212-1212-121212121212',
+      name: 'Delete Me',
+    });
   });
 });

@@ -51,7 +51,10 @@ describe('UsersService', () => {
 
   it('create hashes password, normalizes email and returns public fields', async () => {
     dbMock.user.findUnique.mockResolvedValue(null);
-    dbMock.user.create.mockResolvedValue({ id: 1, email: 'john@example.com' });
+    dbMock.user.create.mockResolvedValue({
+      id: '11111111-1111-1111-1111-111111111111',
+      email: 'john@example.com',
+    });
 
     await service.create({
       fullName: 'John Doe',
@@ -85,7 +88,9 @@ describe('UsersService', () => {
   });
 
   it('create throws BadRequestException when email already exists', async () => {
-    dbMock.user.findUnique.mockResolvedValue({ id: 1 });
+    dbMock.user.findUnique.mockResolvedValue({
+      id: '11111111-1111-1111-1111-111111111111',
+    });
 
     await expect(
       service.create({
@@ -114,17 +119,21 @@ describe('UsersService', () => {
   it('findOne throws NotFoundException when user does not exist', async () => {
     dbMock.user.findUnique.mockResolvedValue(null);
 
-    await expect(service.findOne(999)).rejects.toBeInstanceOf(
+    await expect(service.findOne('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')).rejects.toBeInstanceOf(
       NotFoundException,
     );
   });
 
   it('update hashes password and normalizes email before saving', async () => {
-    dbMock.user.findUnique.mockResolvedValue({ id: 10 });
+    dbMock.user.findUnique.mockResolvedValue({
+      id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    });
     dbMock.user.findFirst.mockResolvedValue(null);
-    dbMock.user.update.mockResolvedValue({ id: 10 });
+    dbMock.user.update.mockResolvedValue({
+      id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    });
 
-    await service.update(10, {
+    await service.update('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', {
       email: '  NEW@EXAMPLE.COM ',
       password: 'newpassword123',
       fullName: 'Updated Name',
@@ -133,7 +142,7 @@ describe('UsersService', () => {
     expect(dbMock.user.findFirst).toHaveBeenCalledWith({
       where: {
         email: 'new@example.com',
-        id: { not: 10 },
+        id: { not: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' },
       },
       select: { id: true },
     });
@@ -154,40 +163,54 @@ describe('UsersService', () => {
   it('update throws NotFoundException when target user does not exist', async () => {
     dbMock.user.findUnique.mockResolvedValue(null);
 
-    await expect(service.update(404, { fullName: 'X' })).rejects.toBeInstanceOf(
+    await expect(service.update('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', { fullName: 'X' })).rejects.toBeInstanceOf(
       NotFoundException,
     );
   });
 
   it('update throws BadRequestException when new email belongs to another user', async () => {
-    dbMock.user.findUnique.mockResolvedValue({ id: 1 });
-    dbMock.user.findFirst.mockResolvedValue({ id: 2 });
+    dbMock.user.findUnique.mockResolvedValue({
+      id: '11111111-1111-1111-1111-111111111111',
+    });
+    dbMock.user.findFirst.mockResolvedValue({
+      id: '22222222-2222-2222-2222-222222222222',
+    });
 
     await expect(
-      service.update(1, { email: 'taken@example.com' }),
+      service.update('11111111-1111-1111-1111-111111111111', {
+        email: 'taken@example.com',
+      }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('update maps P2002 to BadRequestException', async () => {
-    dbMock.user.findUnique.mockResolvedValue({ id: 1 });
+    dbMock.user.findUnique.mockResolvedValue({
+      id: '11111111-1111-1111-1111-111111111111',
+    });
     dbMock.user.findFirst.mockResolvedValue(null);
     dbMock.user.update.mockRejectedValue({ code: 'P2002' });
 
     await expect(
-      service.update(1, { email: 'new@example.com' }),
+      service.update('11111111-1111-1111-1111-111111111111', {
+        email: 'new@example.com',
+      }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('remove maps relation constraint errors to ConflictException', async () => {
-    dbMock.user.findUnique.mockResolvedValue({ id: 5 });
+    dbMock.user.findUnique.mockResolvedValue({
+      id: '55555555-5555-5555-5555-555555555555',
+    });
     dbMock.user.delete.mockRejectedValue({ code: 'P2003' });
 
-    await expect(service.remove(5)).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.remove('55555555-5555-5555-5555-555555555555'),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('remove throws NotFoundException when user does not exist', async () => {
     dbMock.user.findUnique.mockResolvedValue(null);
 
-    await expect(service.remove(888)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.remove('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')).rejects.toBeInstanceOf(NotFoundException);
   });
 });

@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Param,
-  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -27,15 +26,12 @@ export class CandidateController {
   }
 
   @Get(':id/profile')
-  getCandidateProfile(@Param('id', ParseIntPipe) id: number) {
+  getCandidateProfile(@Param('id') id: string) {
     return this.candidateService.getCandidateProfile(id);
   }
 
   @Patch(':id')
-  updateCandidate(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateCandidateDto,
-  ) {
+  updateCandidate(@Param('id') id: string, @Body() dto: UpdateCandidateDto) {
     return this.candidateService.updateCandidate(id, dto);
   }
 }

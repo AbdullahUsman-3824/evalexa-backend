@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Param,
-  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -34,14 +33,14 @@ export class JobsController {
   }
 
   @Get(':id')
-  findOne(@User() user: JwtPayload, @Param('id', ParseIntPipe) id: number) {
+  findOne(@User() user: JwtPayload, @Param('id') id: string) {
     return this.jobsService.findOne(user.companyId, id);
   }
 
   @Patch(':id')
   update(
     @User() user: JwtPayload,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Body() dto: UpdateJobDto,
   ) {
     return this.jobsService.update(user.sub, user.companyId, id, dto);
