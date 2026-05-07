@@ -1,6 +1,5 @@
 import {
   IsEmail,
-  IsIn,
   IsOptional,
   IsString,
   IsUrl,
@@ -38,8 +37,4 @@ export class CreateCandidateDto {
   @IsString()
   @MaxLength(255)
   location?: string;
-
-  @IsOptional()
-  @IsIn(['job_page', 'bulk_upload', 'manual_entry'])
-  source?: 'job_page' | 'bulk_upload' | 'manual_entry';
 }

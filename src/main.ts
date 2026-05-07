@@ -1,12 +1,19 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { json, urlencoded, type NextFunction, type Request, type Response } from 'express';
+import {
+  json,
+  urlencoded,
+  type NextFunction,
+  type Request,
+  type Response,
+} from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bodyParser: false,
+    logger: ['log', 'error', 'warn', 'debug', 'verbose'],
   });
 
   const normalizeOrigin = (value?: string): string =>

@@ -9,7 +9,6 @@ model Resume {
   extractedSkills     Json?               @map("extracted_skills")
   extractedExperience Int?                @map("extracted_experience")
   extractedEducation  String?             @map("extracted_education") @db.VarChar(255)
-  uploadSource        ResumeUploadSource? @map("upload_source")
   isPrimary           Boolean             @map("is_primary") @default(false)
   uploadedAt          DateTime            @map("uploaded_at") @default(now()) @db.Timestamptz(6)
   candidate           Candidate           @relation(fields: [candidateId], references: [id], onDelete: Cascade)
@@ -17,10 +16,4 @@ model Resume {
 
   @@index([candidateId])
   @@map("resume")
-}
-
-enum ResumeUploadSource {
-  CANDIDATE       @map("candidate")
-  RECRUITER_BULK  @map("recruiter_bulk")
-  RECRUITER_MANUAL @map("recruiter_manual")
 }

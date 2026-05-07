@@ -4,7 +4,7 @@ model Application {
   jobId             String            @map("job_id") @db.Uuid
   companyId         String            @map("company_id") @db.Uuid
   resumeId          String            @map("resume_id") @db.Uuid
-  source            ApplicationSource @default(JOB_PAGE)
+  source            ApplicationSource @default(FORM_FILL)
   status            ApplicationStatus @default(APPLIED)
   screeningStage    ScreeningStage    @default(NOT_STARTED) @map("screening_stage")
   matchScore        Int?              @map("match_score")
@@ -26,9 +26,9 @@ model Application {
 }
 
 enum ApplicationSource {
-  JOB_PAGE    @map("job_page")
+  FORM_FILL   @map("formFill")
+  RESUME      @map("resume")
   BULK_UPLOAD @map("bulk_upload")
-  MANUAL      @map("manual")
 }
 
 enum ApplicationStatus {

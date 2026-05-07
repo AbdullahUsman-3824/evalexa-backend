@@ -7,5 +7,6 @@ import { CandidateService } from './candidate.service';
   imports: [DatabaseModule],
   controllers: [CandidateController],
   providers: [CandidateService],
+  exports: [CandidateService],
 })
 export class CandidateModule {}

@@ -32,7 +32,6 @@ describe('JobsService', () => {
         create: jest.fn(),
         findMany: jest.fn(),
         findFirst: jest.fn(),
-        update: jest.fn(),
       },
       skill: {
         findMany: jest.fn(),

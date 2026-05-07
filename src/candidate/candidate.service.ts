@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CandidateSource, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
@@ -10,20 +10,6 @@ export class CandidateService {
 
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
-  }
-
-  private normalizeSource(
-    source?: CreateCandidateDto['source'],
-  ): CandidateSource {
-    switch (source) {
-      case 'bulk_upload':
-        return CandidateSource.BULK_UPLOAD;
-      case 'manual_entry':
-        return CandidateSource.MANUAL_ENTRY;
-      case 'job_page':
-      default:
-        return CandidateSource.JOB_PAGE;
-    }
   }
 
   private hasPrismaErrorCode(error: unknown, code: string): boolean {
@@ -43,7 +29,6 @@ export class CandidateService {
     linkedinUrl: true,
     portfolioUrl: true,
     location: true,
-    source: true,
     createdAt: true,
     updatedAt: true,
   } satisfies Prisma.CandidateSelect;
@@ -70,7 +55,6 @@ export class CandidateService {
       data: {
         ...dto,
         ...(email ? { email } : {}),
-        source: this.normalizeSource(dto.source),
       },
       select: this.candidatePublicSelect,
     });
@@ -83,6 +67,13 @@ export class CandidateService {
 
     return this.db.candidate.findFirst({
       where: { email: this.normalizeEmail(email) },
+      select: this.candidatePublicSelect,
+    });
+  }
+
+  async findById(id: string) {
+    return this.db.candidate.findUnique({
+      where: { id },
       select: this.candidatePublicSelect,
     });
   }
@@ -111,7 +102,7 @@ export class CandidateService {
     }
 
     const email = dto.email ? this.normalizeEmail(dto.email) : undefined;
-    const { source, ...rest } = dto;
+    const rest = dto;
 
     try {
       return await this.db.candidate.update({
@@ -119,7 +110,6 @@ export class CandidateService {
         data: {
           ...rest,
           ...(email ? { email } : {}),
-          ...(source ? { source: this.normalizeSource(source) } : {}),
         },
         select: this.candidatePublicSelect,
       });
