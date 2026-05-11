@@ -14,6 +14,7 @@ describe('CompanyService', () => {
       create: jest.Mock;
       findMany: jest.Mock;
       findFirst: jest.Mock;
+      findUnique: jest.Mock;
       updateMany: jest.Mock;
       delete: jest.Mock;
     };
@@ -30,6 +31,7 @@ describe('CompanyService', () => {
         create: jest.fn(),
         findMany: jest.fn(),
         findFirst: jest.fn(),
+        findUnique: jest.fn(),
         updateMany: jest.fn(),
         delete: jest.fn(),
       },
@@ -98,7 +100,9 @@ describe('CompanyService', () => {
     dbMock.company.create.mockResolvedValue({
       id: '22222222-2222-2222-2222-222222222222',
       name: 'Acme Inc',
+      slug: 'acme-inc',
     });
+    dbMock.company.findUnique.mockResolvedValue(null);
     dbMock.user.update.mockResolvedValue({
       id: '11111111-1111-1111-1111-111111111111',
       companyId: '22222222-2222-2222-2222-222222222222',
@@ -123,11 +127,13 @@ describe('CompanyService', () => {
     expect(dbMock.company.create).toHaveBeenCalledWith({
       data: {
         ...dto,
+        slug: 'acme-inc',
         createdBy: '11111111-1111-1111-1111-111111111111',
       },
       select: expect.objectContaining({
         id: true,
         name: true,
+        slug: true,
         createdBy: true,
       }),
     });
@@ -138,6 +144,7 @@ describe('CompanyService', () => {
     expect(result).toEqual({
       id: '22222222-2222-2222-2222-222222222222',
       name: 'Acme Inc',
+      slug: 'acme-inc',
     });
   });
 
@@ -195,9 +202,11 @@ describe('CompanyService', () => {
 
   it('update persists dto and returns refreshed company', async () => {
     dbMock.company.updateMany.mockResolvedValue({ count: 1 });
+    dbMock.company.findUnique.mockResolvedValue(null);
     dbMock.company.findFirst.mockResolvedValue({
       id: '55555555-5555-5555-5555-555555555555',
       name: 'Updated Co',
+      slug: 'updated-co',
     });
 
     const dto = { name: 'Updated Co', location: 'Karachi' };
@@ -212,7 +221,10 @@ describe('CompanyService', () => {
         id: '55555555-5555-5555-5555-555555555555',
         createdBy: '77777777-7777-7777-7777-777777777777',
       },
-      data: dto,
+      data: {
+        ...dto,
+        slug: 'updated-co',
+      },
     });
     expect(dbMock.company.findFirst).toHaveBeenCalledWith({
       where: {
@@ -224,6 +236,7 @@ describe('CompanyService', () => {
     expect(result).toEqual({
       id: '55555555-5555-5555-5555-555555555555',
       name: 'Updated Co',
+      slug: 'updated-co',
     });
   });
 

@@ -8,8 +8,13 @@ describe('JobsService', () => {
   let dbMock: {
     job: {
       create: jest.Mock;
+      update: jest.Mock;
       findMany: jest.Mock;
       findFirst: jest.Mock;
+      findUnique: jest.Mock;
+    };
+    company: {
+      findUnique: jest.Mock;
     };
     skill: {
       findMany: jest.Mock;
@@ -30,8 +35,13 @@ describe('JobsService', () => {
     dbMock = {
       job: {
         create: jest.fn(),
+        update: jest.fn(),
         findMany: jest.fn(),
         findFirst: jest.fn(),
+        findUnique: jest.fn(),
+      },
+      company: {
+        findUnique: jest.fn(),
       },
       skill: {
         findMany: jest.fn(),
@@ -52,6 +62,7 @@ describe('JobsService', () => {
       async (
         callback: (tx: {
           job: typeof dbMock.job;
+          company: typeof dbMock.company;
           skill: typeof dbMock.skill;
           jobAiConfig: typeof dbMock.jobAiConfig;
           jobSkill: typeof dbMock.jobSkill;
@@ -59,6 +70,7 @@ describe('JobsService', () => {
       ) =>
         callback({
           job: dbMock.job,
+          company: dbMock.company,
           skill: dbMock.skill,
           jobAiConfig: dbMock.jobAiConfig,
           jobSkill: dbMock.jobSkill,
@@ -147,6 +159,10 @@ describe('JobsService', () => {
         category: 'Backend',
       })
       .mockResolvedValueOnce(null);
+    dbMock.company.findUnique.mockResolvedValue({
+      name: 'Acme Inc',
+    });
+    dbMock.job.findUnique.mockResolvedValue(null);
     dbMock.skill.create.mockResolvedValue({
       id: '22222222-2222-2222-2222-222222222222',
       name: 'GraphQL',
@@ -155,6 +171,7 @@ describe('JobsService', () => {
     dbMock.job.create.mockResolvedValue({
       id: '99999999-9999-9999-9999-999999999999',
       title: 'Backend Engineer',
+      slug: 'backend-engineer-at-acme-inc',
     });
 
     const dto = {
@@ -210,6 +227,7 @@ describe('JobsService', () => {
       data: expect.objectContaining({
         companyId: '44444444-4444-4444-4444-444444444444',
         createdBy: '77777777-7777-7777-7777-777777777777',
+        slug: 'backend-engineer-at-acme-inc',
         status: JobStatus.DRAFT,
         jobSkills: {
           create: [
@@ -231,6 +249,7 @@ describe('JobsService', () => {
     expect(result).toEqual({
       id: '99999999-9999-9999-9999-999999999999',
       title: 'Backend Engineer',
+      slug: 'backend-engineer-at-acme-inc',
     });
   });
 
@@ -273,8 +292,12 @@ describe('JobsService', () => {
     dbMock.job.findFirst
       .mockResolvedValueOnce({
         id: '99999999-9999-9999-9999-999999999999',
+        title: 'Backend Engineer',
         salaryMin: 100,
         salaryMax: 200,
+        company: {
+          name: 'Acme Inc',
+        },
         aiConfig: {
           minMatchScore: 70,
           autoShortlistThreshold: 80,
@@ -286,7 +309,12 @@ describe('JobsService', () => {
       .mockResolvedValueOnce({
         id: '99999999-9999-9999-9999-999999999999',
         title: 'Updated Job',
+        slug: 'updated-job-at-acme-inc',
       });
+    dbMock.job.findUnique.mockResolvedValue(null);
+    dbMock.job.update.mockResolvedValue({
+      id: '99999999-9999-9999-9999-999999999999',
+    });
     dbMock.skill.findUnique.mockResolvedValue({
       id: '11111111-1111-1111-1111-111111111111',
       category: 'Backend',
@@ -352,9 +380,17 @@ describe('JobsService', () => {
         aiInterviewThreshold: 95,
       },
     });
+    expect(dbMock.job.update).toHaveBeenCalledWith({
+      where: { id: '99999999-9999-9999-9999-999999999999' },
+      data: expect.objectContaining({
+        title: 'Updated Job',
+        slug: 'updated-job-at-acme-inc',
+      }),
+    });
     expect(result).toEqual({
       id: '99999999-9999-9999-9999-999999999999',
       title: 'Updated Job',
+      slug: 'updated-job-at-acme-inc',
     });
   });
 

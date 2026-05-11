@@ -1,6 +1,5 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import {
   json,
   urlencoded,
@@ -87,17 +86,6 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
     optionsSuccessStatus: 204,
   });
-
-  // Swagger
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Evalexa API')
-    .setDescription('Evalexa backend API documentation')
-    .setVersion('1.0.0')
-    .addBearerAuth()
-    .build();
-
-  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, swaggerDocument);
 
   const port = Number(process.env.PORT) || 3000;
   await app.listen(port);

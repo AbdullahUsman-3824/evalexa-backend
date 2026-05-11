@@ -10,5 +10,6 @@ import { JobsService } from './jobs.service';
   imports: [DatabaseModule, UsersModule, AuthModule],
   controllers: [JobsController],
   providers: [JobsService, RecruiterRoleGuard],
+  exports: [JobsService],
 })
 export class JobsModule {}

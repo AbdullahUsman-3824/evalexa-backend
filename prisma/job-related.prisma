@@ -1,25 +1,26 @@
 model Job {
-  id                  String          @id @default(uuid()) @db.Uuid
-  companyId           String          @db.Uuid
-  createdBy           String          @db.Uuid
-  title               String          @db.VarChar(255)
-  description         String          @db.Text
+  id                  String           @id @default(uuid()) @db.Uuid
+  companyId           String           @db.Uuid
+  createdBy           String           @db.Uuid
+  title               String           @db.VarChar(255)
+  slug                String           @unique @db.VarChar(350)
+  description         String           @db.Text
   jobType             JobType
   experienceLevel     ExperienceLevel
   salaryMin           Int
   salaryMax           Int
-  location            String          @db.VarChar(255)
+  location            String           @db.VarChar(255)
   workModel           WorkModel
-  status              JobStatus       @default(DRAFT)
-  applicationDeadline DateTime        @db.Date
-  company             Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  creator             User            @relation("UserCreatedJobs", fields: [createdBy], references: [id], onDelete: Restrict)
+  status              JobStatus        @default(DRAFT)
+  applicationDeadline DateTime         @db.Date
+  company             Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  creator             User             @relation("UserCreatedJobs", fields: [createdBy], references: [id], onDelete: Restrict)
   aiConfig            JobAiConfig?
   jobSkills           JobSkill[]
   applications        Application[]
   resumeAnalyses      ResumeAnalysis[]
-  createdAt           DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt           DateTime        @updatedAt @db.Timestamptz(6)
+  createdAt           DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @db.Timestamptz(6)
 
   @@index([companyId])
   @@index([createdBy])
@@ -37,8 +38,8 @@ model Skill {
 }
 
 model JobSkill {
-  jobId      String     @map("job_id") @db.Uuid
-  skillId    String     @map("skill_id") @db.Uuid
+  jobId      String          @map("job_id") @db.Uuid
+  skillId    String          @map("skill_id") @db.Uuid
   importance SkillImportance
   weight     Int
   job        Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)

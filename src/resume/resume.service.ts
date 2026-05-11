@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { CandidateService } from '../candidate/candidate.service';
 import { DatabaseService } from '../database/database.service';
-import { SupabaseService } from '../database/supabase.service.js';
+import { SupabaseService } from '../database/supabase.service';
 import {
   AutofillEducationDto,
   AutofillExperienceDto,

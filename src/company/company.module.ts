@@ -10,5 +10,6 @@ import { RecruiterRoleGuard } from './guards/recruiter-role.guard';
   imports: [DatabaseModule, UsersModule, AuthModule],
   controllers: [CompanyController],
   providers: [CompanyService, RecruiterRoleGuard],
+  exports: [CompanyService],
 })
 export class CompanyModule {}

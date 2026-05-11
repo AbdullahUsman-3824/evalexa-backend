@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -225,11 +226,34 @@ export class ApplicationService {
     }
   }
 
+  async findByCandidateAndJob(candidateId: string, jobId: string) {
+    return this.db.application.findFirst({
+      where: {
+        candidateId,
+        jobId,
+      },
+      select: {
+        id: true,
+        status: true,
+        appliedAt: true,
+      },
+    });
+  }
+
   async applyWithParsedData(dto: ApplyWithParsedDto) {
     await this.ensureJobAndCompanyExist(dto.jobId, dto.companyId);
 
     const candidate = await this.resolveCandidate(dto);
     const resume = await this.resolveResume(dto, candidate.id);
+
+    const existingApplication = await this.findByCandidateAndJob(
+      candidate.id,
+      dto.jobId,
+    );
+
+    if (existingApplication) {
+      throw new ConflictException('Application already exists for this job');
+    }
 
     const application = await this.db.application.create({
       data: {

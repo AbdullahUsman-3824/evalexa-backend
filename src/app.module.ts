@@ -8,6 +8,7 @@ import { CompanyModule } from './company/company.module';
 import { CandidateModule } from './candidate/candidate.module';
 import { DatabaseModule } from './database/database.module';
 import { JobsModule } from './jobs/jobs.module';
+import { PublicModule } from './public/public.module';
 import { ResumeModule } from './resume/resume.module';
 import { ScreeningModule } from './screening/screening.module';
 import { UsersModule } from './users/users.module';
@@ -33,6 +34,7 @@ const fastApiBaseUrl = `${(process.env.FASTAPI_URL ?? 'http://127.0.0.1:8000').r
     CandidateModule,
     ResumeModule,
     ApplicationModule,
+    PublicModule,
     ScreeningModule,
   ],
   controllers: [AppController],
