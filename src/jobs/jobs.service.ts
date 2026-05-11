@@ -488,7 +488,9 @@ export class JobsService {
     const where = this.buildPublicJobWhere(query, overrides);
     const orderBy = this.buildPublicOrderBy(query.sort);
 
-    const [totalItems, items] = await this.db.$transaction([
+    // Use Promise.all for parallel reads instead of transaction
+    // (pgbouncer doesn't support complex transactions)
+    const [totalItems, items] = await Promise.all([
       this.db.job.count({ where }),
       this.db.job.findMany({
         where,
