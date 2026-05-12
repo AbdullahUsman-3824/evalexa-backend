@@ -8,13 +8,12 @@ import { CompanyModule } from './company/company.module';
 import { CandidateModule } from './candidate/candidate.module';
 import { DatabaseModule } from './database/database.module';
 import { JobsModule } from './jobs/jobs.module';
+import { FASTAPI_BASE_URL } from './constants/fastapi.constants';
 import { PublicModule } from './public/public.module';
 import { ResumeModule } from './resume/resume.module';
 import { ScreeningModule } from './screening/screening.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
-
-const fastApiBaseUrl = `${(process.env.FASTAPI_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '')}/api/v1`;
 
 @Module({
   imports: [
@@ -24,7 +23,7 @@ const fastApiBaseUrl = `${(process.env.FASTAPI_URL ?? 'http://127.0.0.1:8000').r
     }),
     HttpModule.register({
       global: true,
-      baseURL: fastApiBaseUrl,
+      baseURL: FASTAPI_BASE_URL,
     }),
     CompanyModule,
     DatabaseModule,

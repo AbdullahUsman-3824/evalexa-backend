@@ -1,10 +1,7 @@
 import {
-  BadRequestException,
-  ConflictException,
   GoneException,
   Injectable,
 } from '@nestjs/common';
-import type { Express } from 'express';
 import { ApplicationService } from '../../application/application.service';
 import { ApplyWithParsedDto } from '../../application/dto/apply-with-parsed.dto';
 import { JobsService } from '../../jobs/jobs.service';
@@ -70,50 +67,17 @@ export class PublicJobsService {
       }));
   }
 
-  async applyToJob(
-    jobSlug: string,
-    dto: PublicJobApplicationDto,
-    file: Express.Multer.File,
-  ) {
-    if (!file) {
-      throw new BadRequestException('Resume file is required');
-    }
-
+  async applyToJobWithParsedData(jobSlug: string, dto: PublicJobApplicationDto) {
     const job = await this.jobsService.findPublicJobBySlug(jobSlug);
 
     if (job.applicationDeadline < new Date()) {
       throw new GoneException('This job posting has expired');
     }
 
-    const uploadedResume = await this.resumeService.uploadAndProcess(file);
-
-    const existingApplication =
-      await this.applicationService.findByCandidateAndJob(
-        uploadedResume.candidateId,
-        job.id,
-      );
-
-    if (existingApplication) {
-      throw new ConflictException('Application already exists for this job');
-    }
-
     const applicationDto: ApplyWithParsedDto = {
-      candidateId: uploadedResume.candidateId,
-      resumeId: uploadedResume.resumeId,
-      resumeUrl: uploadedResume.resumeUrl,
+      ...dto,
       jobId: job.id,
       companyId: job.company.id,
-      personal: {
-        firstName: dto.firstName.trim(),
-        lastName: dto.lastName.trim(),
-        email: dto.email ?? uploadedResume.personal.email ?? undefined,
-        phone: dto.phone ?? uploadedResume.personal.phone ?? undefined,
-        headline:
-          uploadedResume.personal.headline ?? dto.coverLetter ?? undefined,
-        address: uploadedResume.personal.address ?? undefined,
-      },
-      education: this.mapResumeEducation(uploadedResume.education),
-      experience: this.mapResumeExperience(uploadedResume.experience),
     };
 
     return this.applicationService.applyWithParsedData(applicationDto);

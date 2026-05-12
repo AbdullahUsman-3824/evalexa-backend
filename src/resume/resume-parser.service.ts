@@ -1,6 +1,7 @@
 import { HttpService } from '@nestjs/axios';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
+import FormData from 'form-data';
 import { FASTAPI_ENDPOINTS } from '../constants/fastapi.constants';
 
 export interface ResumeBasics {
@@ -145,9 +146,11 @@ export class ResumeParserService {
 
     const mimeType = this.getMimeType(fileName);
     const formData = new FormData();
-    const blob = new Blob([new Uint8Array(input)], { type: mimeType });
-
-    formData.append('file', blob, fileName);
+    // form-data package accepts a Buffer with filename and contentType
+    formData.append('file', input, {
+      filename: fileName,
+      contentType: mimeType,
+    });
     return formData;
   }
 
@@ -160,10 +163,8 @@ export class ResumeParserService {
       throw new BadRequestException('File name is required');
     }
 
-    return {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    };
+    // When using the form-data package we must forward its headers (including boundary)
+    const formData = this.buildRequestBody(input, fileName) as FormData;
+    return { headers: formData.getHeaders() };
   }
 }

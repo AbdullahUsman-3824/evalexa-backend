@@ -1,6 +1,4 @@
-import type { Express } from 'express';
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -9,10 +7,7 @@ import {
   Param,
   Post,
   Query,
-  UploadedFile,
-  UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { PublicJobApplicationDto } from '../dto/public-job-application.dto';
 import { PublicJobsQueryDto } from '../dto/public-jobs-query.dto';
 import { PublicJobsService } from '../services/public-jobs.service';
@@ -43,37 +38,10 @@ export class PublicJobsController {
 
   @Post(':jobSlug/apply')
   @HttpCode(HttpStatus.CREATED)
-  @UseInterceptors(
-    FileInterceptor('resumeFile', {
-      limits: { fileSize: 10 * 1024 * 1024 },
-      fileFilter: (_req, file, cb) => {
-        const allowed = [
-          'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        ];
-
-        if (allowed.includes(file.mimetype)) {
-          cb(null, true);
-          return;
-        }
-
-        cb(
-          new BadRequestException('Only PDF, DOC, and DOCX files are allowed'),
-          false,
-        );
-      },
-    }),
-  )
-  apply(
+  applyWithParsedData(
     @Param('jobSlug') jobSlug: string,
     @Body() dto: PublicJobApplicationDto,
-    @UploadedFile() file: Express.Multer.File,
   ) {
-    if (!file) {
-      throw new BadRequestException('No file uploaded');
-    }
-
-    return this.publicJobsService.applyToJob(jobSlug, dto, file);
+    return this.publicJobsService.applyToJobWithParsedData(jobSlug, dto as any);
   }
 }
