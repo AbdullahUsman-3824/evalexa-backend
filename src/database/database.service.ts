@@ -17,7 +17,12 @@ export class DatabaseService
       throw new Error('DIRECT_URL or DATABASE_URL must be configured');
     }
 
-    const pool = new Pool({ connectionString });
+    const pool = new Pool({
+      connectionString,
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    });
     super({ adapter: new PrismaPg(pool) });
     this.pool = pool;
   }

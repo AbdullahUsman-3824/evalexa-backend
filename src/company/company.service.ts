@@ -166,7 +166,7 @@ export class CompanyService {
 
     const orderBy = this.buildPublicOrderBy(query.sort);
 
-    const [totalItems, companies] = await this.db.$transaction([
+    const [totalItems, companies] = await Promise.all([
       this.db.company.count({ where }),
       this.db.company.findMany({
         where,

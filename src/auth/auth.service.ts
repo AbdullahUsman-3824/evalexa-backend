@@ -288,17 +288,20 @@ export class AuthService {
 
     const passwordHash = await hash(newPassword, 10);
 
-    await this.db.$transaction([
-      this.db.user.update({
-        where: { id: user.id },
-        data: {
-          password: passwordHash,
-        },
-      }),
-      this.db.passwordResetOtp.delete({
-        where: { userId: user.id },
-      }),
-    ]);
+    await this.db.$transaction(
+      [
+        this.db.user.update({
+          where: { id: user.id },
+          data: {
+            password: passwordHash,
+          },
+        }),
+        this.db.passwordResetOtp.delete({
+          where: { userId: user.id },
+        }),
+      ],
+      { timeout: 10000 },
+    );
 
     return { message: 'Password reset successfully' };
   }
