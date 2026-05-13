@@ -43,6 +43,53 @@ export class CandidateService {
     },
   } satisfies Prisma.CandidateSelect;
 
+  private readonly candidateRecruiterSelect = {
+    ...this.candidateProfileSelect,
+    resumes: {
+      select: {
+        id: true,
+        resumeUrl: true,
+        fileName: true,
+        description: true,
+        parsedData: true,
+        extractedSkills: true,
+        extractedExperience: true,
+        extractedEducation: true,
+        isPrimary: true,
+        uploadedAt: true,
+      },
+      orderBy: {
+        uploadedAt: 'desc',
+      },
+    },
+    applications: {
+      select: {
+        id: true,
+        jobId: true,
+        companyId: true,
+        resumeId: true,
+        source: true,
+        status: true,
+        screeningStage: true,
+        matchScore: true,
+        rankPosition: true,
+        isAutoShortlisted: true,
+        appliedAt: true,
+        updatedAt: true,
+        job: {
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+          },
+        },
+      },
+      orderBy: {
+        appliedAt: 'desc',
+      },
+    },
+  } satisfies Prisma.CandidateSelect;
+
   async createCandidate(dto: CreateCandidateDto) {
     const email = dto.email ? this.normalizeEmail(dto.email) : undefined;
     const existingCandidate = await this.findByEmail(email);
@@ -89,6 +136,26 @@ export class CandidateService {
     }
 
     return candidate;
+  }
+
+  async getCandidateRecruiterView(id: string) {
+    const candidate = await this.db.candidate.findUnique({
+      where: { id },
+      select: this.candidateRecruiterSelect,
+    });
+
+    if (!candidate) {
+      throw new NotFoundException(`Candidate with id ${id} not found`);
+    }
+
+    return candidate;
+  }
+
+  async findAllRecruiterView() {
+    return this.db.candidate.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: this.candidateRecruiterSelect,
+    });
   }
 
   async updateCandidate(id: string, dto: UpdateCandidateDto) {

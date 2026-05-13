@@ -7,12 +7,44 @@ import {
 import {
   ApplicationSource,
   ApplicationStatus,
+  Prisma,
   ScreeningStage,
 } from '@prisma/client';
+import { isUUID } from 'class-validator';
 import { CandidateService } from '../candidate/candidate.service';
 import { DatabaseService } from '../database/database.service';
 import { ResumeService } from '../resume/resume.service';
 import { ApplyWithParsedDto } from './dto/apply-with-parsed.dto';
+
+const jobApplicationsSelect = {
+  id: true,
+  status: true,
+  screeningStage: true,
+  source: true,
+  matchScore: true,
+  rankPosition: true,
+  isAutoShortlisted: true,
+  appliedAt: true,
+  updatedAt: true,
+  candidate: {
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      phone: true,
+      location: true,
+    },
+  },
+  resume: {
+    select: {
+      id: true,
+      resumeUrl: true,
+      extractedEducation: true,
+      extractedExperience: true,
+      uploadedAt: true,
+    },
+  },
+} satisfies Prisma.ApplicationSelect;
 
 @Injectable()
 export class ApplicationService {
@@ -238,6 +270,46 @@ export class ApplicationService {
         appliedAt: true,
       },
     });
+  }
+
+  async findAllByJob(companyId: string | null | undefined, jobId: string) {
+    if (!companyId) {
+      throw new BadRequestException(
+        'Recruiter must have a company to list job applications',
+      );
+    }
+
+    if (!isUUID(jobId)) {
+      throw new BadRequestException('jobId must be a valid UUID');
+    }
+
+    const [job, applications] = await Promise.all([
+      this.db.job.findFirst({
+        where: {
+          id: jobId,
+          companyId,
+        },
+        select: {
+          id: true,
+        },
+      }),
+      this.db.application.findMany({
+        where: {
+          jobId,
+          companyId,
+        },
+        orderBy: {
+          appliedAt: 'desc',
+        },
+        select: jobApplicationsSelect,
+      }),
+    ]);
+
+    if (!job) {
+      throw new NotFoundException('Job not found');
+    }
+
+    return applications;
   }
 
   async applyWithParsedData(dto: ApplyWithParsedDto) {

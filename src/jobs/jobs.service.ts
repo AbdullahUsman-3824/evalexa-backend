@@ -127,6 +127,23 @@ const publicJobSelect = {
 export class JobsService {
   constructor(private readonly db: DatabaseService) {}
 
+  async findTitles(companyId: string | null | undefined) {
+    if (!companyId) {
+      throw new BadRequestException(
+        'Recruiter must have a company to list jobs',
+      );
+    }
+
+    return this.db.job.findMany({
+      where: { companyId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+      },
+    });
+  }
+
   private slugifySegment(value: string): string {
     const normalized = value
       .toLowerCase()

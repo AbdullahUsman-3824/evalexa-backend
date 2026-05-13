@@ -6,7 +6,10 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RecruiterRoleGuard } from '../company/guards/recruiter-role.guard';
 import { CandidateService } from './candidate.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
@@ -28,6 +31,18 @@ export class CandidateController {
   @Get(':id/profile')
   getCandidateProfile(@Param('id') id: string) {
     return this.candidateService.getCandidateProfile(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RecruiterRoleGuard)
+  @Get()
+  findAllRecruiterView() {
+    return this.candidateService.findAllRecruiterView();
+  }
+
+  @UseGuards(JwtAuthGuard, RecruiterRoleGuard)
+  @Get(':id')
+  getCandidateRecruiterView(@Param('id') id: string) {
+    return this.candidateService.getCandidateRecruiterView(id);
   }
 
   @Patch(':id')

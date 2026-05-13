@@ -32,6 +32,11 @@ export class JobsController {
     return this.jobsService.findAll(user.companyId, query);
   }
 
+  @Get('titles')
+  findTitles(@User() user: JwtPayload) {
+    return this.jobsService.findTitles(user.companyId);
+  }
+
   @Get(':id')
   findOne(@User() user: JwtPayload, @Param('id') id: string) {
     return this.jobsService.findOne(user.companyId, id);
