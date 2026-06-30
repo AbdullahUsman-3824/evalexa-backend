@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
 import { JobStatus, SkillImportance } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { JobsService } from './jobs.service';
@@ -18,8 +19,6 @@ describe('JobsService', () => {
     };
     skill: {
       findMany: jest.Mock;
-      findUnique: jest.Mock;
-      create: jest.Mock;
     };
     jobAiConfig: {
       upsert: jest.Mock;
@@ -45,8 +44,6 @@ describe('JobsService', () => {
       },
       skill: {
         findMany: jest.fn(),
-        findUnique: jest.fn(),
-        create: jest.fn(),
       },
       jobAiConfig: {
         upsert: jest.fn(),
@@ -77,17 +74,15 @@ describe('JobsService', () => {
         }),
     );
 
-    const module = await import('@nestjs/testing').then(({ Test }) =>
-      Test.createTestingModule({
-        providers: [
-          JobsService,
-          {
-            provide: DatabaseService,
-            useValue: dbMock,
-          },
-        ],
-      }).compile(),
-    );
+    const module = await Test.createTestingModule({
+      providers: [
+        JobsService,
+        {
+          provide: DatabaseService,
+          useValue: dbMock,
+        },
+      ],
+    }).compile();
 
     service = module.get<JobsService>(JobsService);
   });
@@ -103,21 +98,26 @@ describe('JobsService', () => {
         'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
         {
           title: 'Backend Engineer',
+          department: 'Engineering',
           description: 'Build APIs',
+          responsibilities: 'Write code',
           jobType: 'full-time' as never,
           experienceLevel: 'senior' as never,
-          salaryMin: 200,
-          salaryMax: 100,
+          salary: {
+            min: 200,
+            max: 100,
+            currency: 'PKR',
+            period: 'monthly' as never,
+          },
           location: 'Lahore',
           workModel: 'hybrid' as never,
           applicationDeadline: new Date('2026-05-01T00:00:00.000Z'),
           skills: [],
           aiConfig: {
-            minMatchScore: 70,
-            autoShortlistThreshold: 80,
             enableAutoShortlist: true,
+            resumeSelectionCount: 10,
             enableAiInterview: false,
-            aiInterviewThreshold: 90,
+            interviewSelectionCount: 5,
           },
         },
       ),
@@ -128,46 +128,38 @@ describe('JobsService', () => {
     await expect(
       service.create('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', null, {
         title: 'Backend Engineer',
+        department: 'Engineering',
         description: 'Build APIs',
+        responsibilities: 'Write code',
         jobType: 'full-time' as never,
         experienceLevel: 'senior' as never,
-        salaryMin: 100,
-        salaryMax: 200,
+        salary: {
+          min: 100,
+          max: 200,
+          currency: 'PKR',
+          period: 'monthly' as never,
+        },
         location: 'Lahore',
         workModel: 'hybrid' as never,
         applicationDeadline: new Date('2026-05-01T00:00:00.000Z'),
         skills: [],
         aiConfig: {
-          minMatchScore: 70,
-          autoShortlistThreshold: 80,
           enableAutoShortlist: true,
+          resumeSelectionCount: 10,
           enableAiInterview: false,
-          aiInterviewThreshold: 90,
+          interviewSelectionCount: 5,
         },
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('create reuses and creates skills in the same transaction', async () => {
+  it('create validates skill ids exist and passes them directly to job.create', async () => {
     dbMock.skill.findMany.mockResolvedValue([
       { id: '11111111-1111-1111-1111-111111111111' },
       { id: '22222222-2222-2222-2222-222222222222' },
     ]);
-    dbMock.skill.findUnique
-      .mockResolvedValueOnce({
-        id: '11111111-1111-1111-1111-111111111111',
-        category: 'Backend',
-      })
-      .mockResolvedValueOnce(null);
-    dbMock.company.findUnique.mockResolvedValue({
-      name: 'Acme Inc',
-    });
+    dbMock.company.findUnique.mockResolvedValue({ name: 'Acme Inc' });
     dbMock.job.findUnique.mockResolvedValue(null);
-    dbMock.skill.create.mockResolvedValue({
-      id: '22222222-2222-2222-2222-222222222222',
-      name: 'GraphQL',
-      category: 'Backend',
-    });
     dbMock.job.create.mockResolvedValue({
       id: '99999999-9999-9999-9999-999999999999',
       title: 'Backend Engineer',
@@ -176,35 +168,38 @@ describe('JobsService', () => {
 
     const dto = {
       title: 'Backend Engineer',
+      department: 'Engineering',
       description: 'Build APIs',
+      responsibilities: 'Write code',
       jobType: 'full-time' as never,
       experienceLevel: 'senior' as never,
-      salaryMin: 100,
-      salaryMax: 200,
+      salary: {
+        min: 100,
+        max: 200,
+        currency: 'PKR',
+        period: 'monthly' as never,
+      },
       location: 'Lahore',
       workModel: 'hybrid' as never,
       status: JobStatus.DRAFT,
       applicationDeadline: new Date('2026-05-01T00:00:00.000Z'),
       skills: [
         {
-          name: 'Node.js',
-          category: 'Backend',
+          skillId: '11111111-1111-1111-1111-111111111111',
           importance: SkillImportance.REQUIRED,
           weight: 10,
         },
         {
-          name: 'GraphQL',
-          category: 'Backend',
+          skillId: '22222222-2222-2222-2222-222222222222',
           importance: SkillImportance.PREFERRED,
           weight: 5,
         },
       ],
       aiConfig: {
-        minMatchScore: 70,
-        autoShortlistThreshold: 80,
         enableAutoShortlist: true,
+        resumeSelectionCount: 10,
         enableAiInterview: false,
-        aiInterviewThreshold: 90,
+        interviewSelectionCount: 5,
       },
     };
 
@@ -215,19 +210,30 @@ describe('JobsService', () => {
     );
 
     expect(dbMock.$transaction).toHaveBeenCalled();
-    expect(dbMock.skill.findUnique).toHaveBeenCalledWith({
-      where: { name: 'Node.js' },
-      select: { id: true, category: true },
+
+    // ensureSkillsExist should query by id, not name
+    expect(dbMock.skill.findMany).toHaveBeenCalledWith({
+      where: {
+        id: {
+          in: [
+            '11111111-1111-1111-1111-111111111111',
+            '22222222-2222-2222-2222-222222222222',
+          ],
+        },
+      },
+      select: { id: true },
     });
-    expect(dbMock.skill.create).toHaveBeenCalledWith({
-      data: { name: 'GraphQL', category: 'Backend' },
-      select: { id: true, name: true, category: true },
-    });
+
+    // no skill creation should happen
     expect(dbMock.job.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         companyId: '44444444-4444-4444-4444-444444444444',
         createdBy: '77777777-7777-7777-7777-777777777777',
         slug: 'backend-engineer-at-acme-inc',
+        department: 'Engineering',
+        salaryMin: 100,
+        salaryMax: 200,
+        salaryCurrency: 'PKR',
         status: JobStatus.DRAFT,
         jobSkills: {
           create: [
@@ -246,11 +252,57 @@ describe('JobsService', () => {
       }),
       select: expect.objectContaining({ id: true, title: true }),
     });
+
     expect(result).toEqual({
       id: '99999999-9999-9999-9999-999999999999',
       title: 'Backend Engineer',
       slug: 'backend-engineer-at-acme-inc',
     });
+  });
+
+  it('create throws BadRequestException when a skill id does not exist', async () => {
+    dbMock.skill.findMany.mockResolvedValue([]);
+    dbMock.company.findUnique.mockResolvedValue({ name: 'Acme Inc' });
+    dbMock.job.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.create(
+        '77777777-7777-7777-7777-777777777777',
+        '44444444-4444-4444-4444-444444444444',
+        {
+          title: 'Backend Engineer',
+          department: 'Engineering',
+          description: 'Build APIs',
+          responsibilities: 'Write code',
+          jobType: 'full-time' as never,
+          experienceLevel: 'senior' as never,
+          salary: {
+            min: 100,
+            max: 200,
+            currency: 'PKR',
+            period: 'monthly' as never,
+          },
+          location: 'Lahore',
+          workModel: 'hybrid' as never,
+          applicationDeadline: new Date('2026-05-01T00:00:00.000Z'),
+          skills: [
+            {
+              skillId: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+              importance: SkillImportance.REQUIRED,
+              weight: 10,
+            },
+          ],
+          aiConfig: {
+            enableAutoShortlist: true,
+            resumeSelectionCount: 10,
+            enableAiInterview: false,
+            interviewSelectionCount: 5,
+          },
+        },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(dbMock.job.create).not.toHaveBeenCalled();
   });
 
   it('findAll scopes jobs to the company and applies filters and sort', async () => {
@@ -295,15 +347,12 @@ describe('JobsService', () => {
         title: 'Backend Engineer',
         salaryMin: 100,
         salaryMax: 200,
-        company: {
-          name: 'Acme Inc',
-        },
+        company: { name: 'Acme Inc' },
         aiConfig: {
-          minMatchScore: 70,
-          autoShortlistThreshold: 80,
           enableAutoShortlist: true,
+          resumeSelectionCount: 10,
           enableAiInterview: false,
-          aiInterviewThreshold: 90,
+          interviewSelectionCount: 5,
         },
       })
       .mockResolvedValueOnce({
@@ -311,14 +360,15 @@ describe('JobsService', () => {
         title: 'Updated Job',
         slug: 'updated-job-at-acme-inc',
       });
+
     dbMock.job.findUnique.mockResolvedValue(null);
     dbMock.job.update.mockResolvedValue({
       id: '99999999-9999-9999-9999-999999999999',
     });
-    dbMock.skill.findUnique.mockResolvedValue({
-      id: '11111111-1111-1111-1111-111111111111',
-      category: 'Backend',
-    });
+    dbMock.skill.findMany.mockResolvedValue([
+      { id: '11111111-1111-1111-1111-111111111111' },
+    ]);
+    dbMock.jobSkill.deleteMany.mockResolvedValue({ count: 1 });
     dbMock.jobSkill.createMany.mockResolvedValue({ count: 1 });
     dbMock.jobAiConfig.upsert.mockResolvedValue({
       id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
@@ -333,25 +383,29 @@ describe('JobsService', () => {
         title: 'Updated Job',
         skills: [
           {
-            name: 'Node.js',
-            category: 'Backend',
+            skillId: '11111111-1111-1111-1111-111111111111',
             importance: SkillImportance.REQUIRED,
             weight: 10,
           },
         ],
         aiConfig: {
-          minMatchScore: 75,
-          autoShortlistThreshold: 85,
           enableAutoShortlist: true,
+          resumeSelectionCount: 15,
           enableAiInterview: true,
-          aiInterviewThreshold: 95,
+          interviewSelectionCount: 8,
         },
       } as never,
     );
 
+    expect(dbMock.skill.findMany).toHaveBeenCalledWith({
+      where: { id: { in: ['11111111-1111-1111-1111-111111111111'] } },
+      select: { id: true },
+    });
+
     expect(dbMock.jobSkill.deleteMany).toHaveBeenCalledWith({
       where: { jobId: '99999999-9999-9999-9999-999999999999' },
     });
+
     expect(dbMock.jobSkill.createMany).toHaveBeenCalledWith({
       data: [
         {
@@ -362,24 +416,24 @@ describe('JobsService', () => {
         },
       ],
     });
+
     expect(dbMock.jobAiConfig.upsert).toHaveBeenCalledWith({
       where: { jobId: '99999999-9999-9999-9999-999999999999' },
       create: {
         jobId: '99999999-9999-9999-9999-999999999999',
-        minMatchScore: 75,
-        autoShortlistThreshold: 85,
         enableAutoShortlist: true,
+        resumeSelectionCount: 15,
         enableAiInterview: true,
-        aiInterviewThreshold: 95,
+        interviewSelectionCount: 8,
       },
       update: {
-        minMatchScore: 75,
-        autoShortlistThreshold: 85,
         enableAutoShortlist: true,
+        resumeSelectionCount: 15,
         enableAiInterview: true,
-        aiInterviewThreshold: 95,
+        interviewSelectionCount: 8,
       },
     });
+
     expect(dbMock.job.update).toHaveBeenCalledWith({
       where: { id: '99999999-9999-9999-9999-999999999999' },
       data: expect.objectContaining({
@@ -387,6 +441,7 @@ describe('JobsService', () => {
         slug: 'updated-job-at-acme-inc',
       }),
     });
+
     expect(result).toEqual({
       id: '99999999-9999-9999-9999-999999999999',
       title: 'Updated Job',
@@ -402,9 +457,7 @@ describe('JobsService', () => {
         '77777777-7777-7777-7777-777777777777',
         '44444444-4444-4444-4444-444444444444',
         'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
-        {
-          title: 'Updated Job',
-        } as never,
+        { title: 'Updated Job' } as never,
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
   });

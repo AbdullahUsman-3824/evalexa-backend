@@ -1,14 +1,9 @@
 import { SkillImportance } from '@prisma/client';
-import { IsEnum, IsInt, IsString, MaxLength, Min } from 'class-validator';
+import { IsEnum, IsInt, IsUUID, Min } from 'class-validator';
 
 export class JobSkillInputDto {
-  @IsString()
-  @MaxLength(150)
-  name!: string;
-
-  @IsString()
-  @MaxLength(100)
-  category!: string;
+  @IsUUID()
+  skillId!: string;
 
   @IsEnum(SkillImportance)
   importance!: SkillImportance;

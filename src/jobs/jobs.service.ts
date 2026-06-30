@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { JobStatus, Prisma, SkillImportance } from '@prisma/client';
+import { JobStatus, Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import {
   PublicJobsQueryDto,
@@ -20,11 +20,16 @@ const jobSelect = {
   createdBy: true,
   title: true,
   slug: true,
+  department: true,
   description: true,
+  responsibilities: true,
   jobType: true,
   experienceLevel: true,
+  educationLevel: true,
   salaryMin: true,
   salaryMax: true,
+  salaryCurrency: true,
+  salaryPeriod: true,
   location: true,
   workModel: true,
   status: true,
@@ -50,11 +55,10 @@ const jobSelect = {
     select: {
       id: true,
       jobId: true,
-      minMatchScore: true,
-      autoShortlistThreshold: true,
       enableAutoShortlist: true,
+      resumeSelectionCount: true,
       enableAiInterview: true,
-      aiInterviewThreshold: true,
+      interviewSelectionCount: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -94,11 +98,16 @@ const publicJobSelect = {
   id: true,
   title: true,
   slug: true,
+  department: true,
   description: true,
+  responsibilities: true,
   jobType: true,
   experienceLevel: true,
+  educationLevel: true,
   salaryMin: true,
   salaryMax: true,
+  salaryCurrency: true,
+  salaryPeriod: true,
   location: true,
   workModel: true,
   status: true,
@@ -221,112 +230,6 @@ export class JobsService {
     }
   }
 
-  private normalizeSkillName(name: string): string {
-    return name.trim();
-  }
-
-  private normalizeSkillCategory(category: string): string {
-    return category.trim();
-  }
-
-  private async upsertSkills(
-    transaction: Prisma.TransactionClient,
-    skills: Array<{
-      name: string;
-      category: string;
-      importance: SkillImportance;
-      weight: number;
-    }>,
-  ): Promise<
-    Array<{
-      skillId: string;
-      importance: SkillImportance;
-      weight: number;
-    }>
-  > {
-    const uniqueSkills = new Map<
-      string,
-      {
-        name: string;
-        category: string;
-        importance: SkillImportance;
-        weight: number;
-      }
-    >();
-
-    for (const skill of skills) {
-      const name = this.normalizeSkillName(skill.name);
-      const category = this.normalizeSkillCategory(skill.category);
-      const key = name.toLowerCase();
-
-      if (uniqueSkills.has(key)) {
-        continue;
-      }
-
-      uniqueSkills.set(key, {
-        name,
-        category,
-        importance: skill.importance,
-        weight: skill.weight,
-      });
-    }
-
-    const skillRecords = await Promise.all(
-      [...uniqueSkills.values()].map(async (skill) => {
-        const existingSkill = await transaction.skill.findUnique({
-          where: { name: skill.name },
-          select: { id: true, category: true },
-        });
-
-        if (existingSkill) {
-          if (existingSkill.category !== skill.category) {
-            throw new BadRequestException(
-              `Skill "${skill.name}" already exists with category "${existingSkill.category}"`,
-            );
-          }
-
-          return {
-            id: existingSkill.id,
-            name: skill.name,
-            category: existingSkill.category,
-          };
-        }
-
-        return transaction.skill.create({
-          data: {
-            name: skill.name,
-            category: skill.category,
-          },
-          select: {
-            id: true,
-            name: true,
-            category: true,
-          },
-        });
-      }),
-    );
-
-    const skillIdByName = new Map(
-      skillRecords.map((skill) => [skill.name.toLowerCase(), skill.id]),
-    );
-
-    return [...uniqueSkills.values()].map((skill) => {
-      const skillId = skillIdByName.get(skill.name.toLowerCase());
-
-      if (!skillId) {
-        throw new BadRequestException(
-          `Unable to resolve skill id for "${skill.name}"`,
-        );
-      }
-
-      return {
-        skillId,
-        importance: skill.importance,
-        weight: skill.weight,
-      };
-    });
-  }
-
   private validateSalaryRange(salaryMin: number, salaryMax: number) {
     if (salaryMin > salaryMax) {
       throw new BadRequestException('salaryMin must be less than salaryMax');
@@ -335,11 +238,10 @@ export class JobsService {
 
   private mergeAiConfig(
     current: {
-      minMatchScore: number;
-      autoShortlistThreshold: number;
       enableAutoShortlist: boolean;
+      resumeSelectionCount: number;
       enableAiInterview: boolean;
-      aiInterviewThreshold: number;
+      interviewSelectionCount: number;
     } | null,
     patch: UpdateJobDto['aiConfig'],
   ) {
@@ -348,14 +250,13 @@ export class JobsService {
     }
 
     const merged = {
-      minMatchScore: patch.minMatchScore ?? current?.minMatchScore,
-      autoShortlistThreshold:
-        patch.autoShortlistThreshold ?? current?.autoShortlistThreshold,
       enableAutoShortlist:
         patch.enableAutoShortlist ?? current?.enableAutoShortlist,
+      resumeSelectionCount:
+        patch.resumeSelectionCount ?? current?.resumeSelectionCount,
       enableAiInterview: patch.enableAiInterview ?? current?.enableAiInterview,
-      aiInterviewThreshold:
-        patch.aiInterviewThreshold ?? current?.aiInterviewThreshold,
+      interviewSelectionCount:
+        patch.interviewSelectionCount ?? current?.interviewSelectionCount,
     };
 
     const missingFields = Object.entries(merged)
@@ -369,11 +270,10 @@ export class JobsService {
     }
 
     return merged as {
-      minMatchScore: number;
-      autoShortlistThreshold: number;
       enableAutoShortlist: boolean;
+      resumeSelectionCount: number;
       enableAiInterview: boolean;
-      aiInterviewThreshold: number;
+      interviewSelectionCount: number;
     };
   }
 
@@ -505,8 +405,6 @@ export class JobsService {
     const where = this.buildPublicJobWhere(query, overrides);
     const orderBy = this.buildPublicOrderBy(query.sort);
 
-    // Use Promise.all for parallel reads instead of transaction
-    // (pgbouncer doesn't support complex transactions)
     const [totalItems, items] = await Promise.all([
       this.db.job.count({ where }),
       this.db.job.findMany({
@@ -629,7 +527,7 @@ export class JobsService {
     companyId: string | null | undefined,
     dto: CreateJobDto,
   ) {
-    this.validateSalaryRange(dto.salaryMin, dto.salaryMax);
+    this.validateSalaryRange(dto.salary.min, dto.salary.max);
 
     const ownedCompanyId = this.requireCompanyId(companyId);
 
@@ -651,7 +549,7 @@ export class JobsService {
         company.name,
       );
 
-      const skills = await this.upsertSkills(transaction, dto.skills);
+      await this.ensureSkillsExist(dto.skills.map((s) => s.skillId));
 
       return transaction.job.create({
         data: {
@@ -659,11 +557,16 @@ export class JobsService {
           createdBy: userId,
           title: dto.title,
           slug,
+          department: dto.department,
           description: dto.description,
+          responsibilities: dto.responsibilities,
           jobType: dto.jobType,
           experienceLevel: dto.experienceLevel,
-          salaryMin: dto.salaryMin,
-          salaryMax: dto.salaryMax,
+          educationLevel: dto.educationLevel,
+          salaryMin: dto.salary.min,
+          salaryMax: dto.salary.max,
+          salaryCurrency: dto.salary.currency,
+          salaryPeriod: dto.salary.period,
           location: dto.location,
           workModel: dto.workModel,
           status: dto.status ?? JobStatus.DRAFT,
@@ -672,7 +575,7 @@ export class JobsService {
             create: dto.aiConfig,
           },
           jobSkills: {
-            create: skills.map((skill) => ({
+            create: dto.skills.map((skill) => ({
               skillId: skill.skillId,
               importance: skill.importance,
               weight: skill.weight,
@@ -763,11 +666,10 @@ export class JobsService {
         },
         aiConfig: {
           select: {
-            minMatchScore: true,
-            autoShortlistThreshold: true,
             enableAutoShortlist: true,
+            resumeSelectionCount: true,
             enableAiInterview: true,
-            aiInterviewThreshold: true,
+            interviewSelectionCount: true,
           },
         },
       },
@@ -777,17 +679,13 @@ export class JobsService {
       throw new NotFoundException(`Job with id ${id} not found`);
     }
 
-    const nextSalaryMin = dto.salaryMin ?? currentJob.salaryMin;
-    const nextSalaryMax = dto.salaryMax ?? currentJob.salaryMax;
+    const nextSalaryMin = dto.salary?.min ?? currentJob.salaryMin;
+    const nextSalaryMax = dto.salary?.max ?? currentJob.salaryMax;
     this.validateSalaryRange(nextSalaryMin, nextSalaryMax);
 
     const aiConfig = this.mergeAiConfig(currentJob.aiConfig, dto.aiConfig);
 
     return this.db.$transaction(async (transaction) => {
-      const skills = dto.skills
-        ? await this.upsertSkills(transaction, dto.skills)
-        : null;
-
       const slug = dto.title
         ? await this.generateUniqueJobSlug(
             transaction,
@@ -802,13 +700,26 @@ export class JobsService {
         data: {
           ...(dto.title ? { title: dto.title } : {}),
           ...(slug ? { slug } : {}),
+          ...(dto.department ? { department: dto.department } : {}),
           ...(dto.description ? { description: dto.description } : {}),
+          ...(dto.responsibilities
+            ? { responsibilities: dto.responsibilities }
+            : {}),
           ...(dto.jobType ? { jobType: dto.jobType } : {}),
           ...(dto.experienceLevel
             ? { experienceLevel: dto.experienceLevel }
             : {}),
-          ...(dto.salaryMin !== undefined ? { salaryMin: dto.salaryMin } : {}),
-          ...(dto.salaryMax !== undefined ? { salaryMax: dto.salaryMax } : {}),
+          ...(dto.educationLevel ? { educationLevel: dto.educationLevel } : {}),
+          ...(dto.salary?.min !== undefined
+            ? { salaryMin: dto.salary.min }
+            : {}),
+          ...(dto.salary?.max !== undefined
+            ? { salaryMax: dto.salary.max }
+            : {}),
+          ...(dto.salary?.currency
+            ? { salaryCurrency: dto.salary.currency }
+            : {}),
+          ...(dto.salary?.period ? { salaryPeriod: dto.salary.period } : {}),
           ...(dto.location ? { location: dto.location } : {}),
           ...(dto.workModel ? { workModel: dto.workModel } : {}),
           ...(dto.status ? { status: dto.status } : {}),
@@ -830,13 +741,13 @@ export class JobsService {
       }
 
       if (dto.skills) {
-        await transaction.jobSkill.deleteMany({
-          where: { jobId: id },
-        });
+        await this.ensureSkillsExist(dto.skills.map((s) => s.skillId));
 
-        if (skills && skills.length > 0) {
+        await transaction.jobSkill.deleteMany({ where: { jobId: id } });
+
+        if (dto.skills.length > 0) {
           await transaction.jobSkill.createMany({
-            data: skills.map((skill) => ({
+            data: dto.skills.map((skill) => ({
               jobId: id,
               skillId: skill.skillId,
               importance: skill.importance,

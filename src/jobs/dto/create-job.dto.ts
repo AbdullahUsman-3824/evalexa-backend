@@ -11,9 +11,33 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { ExperienceLevel, JobStatus, JobType, WorkModel } from '@prisma/client';
+import {
+  EducationLevel,
+  ExperienceLevel,
+  JobStatus,
+  JobType,
+  WorkModel,
+  SalaryPeriod,
+} from '@prisma/client';
 import { JobAiConfigDto } from './job-ai-config.dto';
 import { JobSkillInputDto } from './job-skill-input.dto';
+
+export class SalaryDto {
+  @IsInt()
+  @Min(0)
+  min!: number;
+
+  @IsInt()
+  @Min(0)
+  max!: number;
+
+  @IsString()
+  @MaxLength(10)
+  currency: string = 'PKR';
+
+  @IsEnum(SalaryPeriod)
+  period!: SalaryPeriod;
+}
 
 export class CreateJobDto {
   @IsString()
@@ -21,36 +45,43 @@ export class CreateJobDto {
   title!: string;
 
   @IsString()
-  description!: string;
-
-  @IsEnum(JobType)
-  jobType!: JobType;
-
-  @IsEnum(ExperienceLevel)
-  experienceLevel!: ExperienceLevel;
-
-  @IsInt()
-  @Min(0)
-  salaryMin!: number;
-
-  @IsInt()
-  @Min(0)
-  salaryMax!: number;
+  @MaxLength(255)
+  department!: string;
 
   @IsString()
   @MaxLength(255)
   location!: string;
 
+  @IsEnum(JobType)
+  jobType!: JobType;
+
   @IsEnum(WorkModel)
   workModel!: WorkModel;
 
-  @IsOptional()
-  @IsEnum(JobStatus)
-  status?: JobStatus;
+  @IsString()
+  description!: string;
+
+  @IsString()
+  responsibilities!: string;
 
   @Type(() => Date)
   @IsDate()
   applicationDeadline!: Date;
+
+  @IsEnum(ExperienceLevel)
+  experienceLevel!: ExperienceLevel;
+
+  @IsOptional()
+  @IsEnum(EducationLevel)
+  educationLevel?: EducationLevel;
+
+  @ValidateNested()
+  @Type(() => SalaryDto)
+  salary!: SalaryDto;
+
+  @IsOptional()
+  @IsEnum(JobStatus)
+  status?: JobStatus;
 
   @IsArray()
   @ArrayMinSize(1)

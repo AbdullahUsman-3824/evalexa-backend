@@ -107,7 +107,7 @@ export class CandidateService {
     });
   }
 
-  async findByEmail(email?: string | null) {
+  findByEmail(email?: string | null) {
     if (!email) {
       return null;
     }
@@ -118,7 +118,7 @@ export class CandidateService {
     });
   }
 
-  async findById(id: string) {
+  findById(id: string) {
     return this.db.candidate.findUnique({
       where: { id },
       select: this.candidatePublicSelect,
@@ -151,7 +151,7 @@ export class CandidateService {
     return candidate;
   }
 
-  async findAllRecruiterView() {
+  findAllRecruiterView() {
     return this.db.candidate.findMany({
       orderBy: { createdAt: 'desc' },
       select: this.candidateRecruiterSelect,

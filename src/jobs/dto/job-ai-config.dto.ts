@@ -1,24 +1,17 @@
-import { IsBoolean, IsInt, Max, Min } from 'class-validator';
+import { IsBoolean, IsInt, Min } from 'class-validator';
 
 export class JobAiConfigDto {
-  @IsInt()
-  @Min(0)
-  @Max(100)
-  minMatchScore!: number;
-
-  @IsInt()
-  @Min(0)
-  @Max(100)
-  autoShortlistThreshold!: number;
-
   @IsBoolean()
   enableAutoShortlist!: boolean;
+
+  @IsInt()
+  @Min(1)
+  resumeSelectionCount!: number;
 
   @IsBoolean()
   enableAiInterview!: boolean;
 
   @IsInt()
-  @Min(0)
-  @Max(100)
-  aiInterviewThreshold!: number;
+  @Min(1)
+  interviewSelectionCount!: number;
 }

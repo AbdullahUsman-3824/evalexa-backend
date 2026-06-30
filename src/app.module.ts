@@ -14,6 +14,7 @@ import { ResumeModule } from './resume/resume.module';
 import { ScreeningModule } from './screening/screening.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { SkillsModule } from './skills/skills.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { AuthModule } from './auth/auth.module';
     ApplicationModule,
     PublicModule,
     ScreeningModule,
+    SkillsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

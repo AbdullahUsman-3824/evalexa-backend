@@ -10,9 +10,37 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { ExperienceLevel, JobStatus, JobType, WorkModel } from '@prisma/client';
+import {
+  EducationLevel,
+  ExperienceLevel,
+  JobStatus,
+  JobType,
+  SalaryPeriod,
+  WorkModel,
+} from '@prisma/client';
 import { JobAiConfigDto } from './job-ai-config.dto';
 import { JobSkillInputDto } from './job-skill-input.dto';
+
+export class UpdateSalaryDto {
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  min?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  max?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(10)
+  currency?: string;
+
+  @IsOptional()
+  @IsEnum(SalaryPeriod)
+  period?: SalaryPeriod;
+}
 
 export class UpdateJobDto {
   @IsOptional()
@@ -22,25 +50,8 @@ export class UpdateJobDto {
 
   @IsOptional()
   @IsString()
-  description?: string;
-
-  @IsOptional()
-  @IsEnum(JobType)
-  jobType?: JobType;
-
-  @IsOptional()
-  @IsEnum(ExperienceLevel)
-  experienceLevel?: ExperienceLevel;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  salaryMin?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  salaryMax?: number;
+  @MaxLength(255)
+  department?: string;
 
   @IsOptional()
   @IsString()
@@ -48,17 +59,42 @@ export class UpdateJobDto {
   location?: string;
 
   @IsOptional()
+  @IsEnum(JobType)
+  jobType?: JobType;
+
+  @IsOptional()
   @IsEnum(WorkModel)
   workModel?: WorkModel;
 
   @IsOptional()
-  @IsEnum(JobStatus)
-  status?: JobStatus;
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  responsibilities?: string;
 
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   applicationDeadline?: Date;
+
+  @IsOptional()
+  @IsEnum(ExperienceLevel)
+  experienceLevel?: ExperienceLevel;
+
+  @IsOptional()
+  @IsEnum(EducationLevel)
+  educationLevel?: EducationLevel;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateSalaryDto)
+  salary?: UpdateSalaryDto;
+
+  @IsOptional()
+  @IsEnum(JobStatus)
+  status?: JobStatus;
 
   @IsOptional()
   @IsArray()
