@@ -12,10 +12,10 @@ model Application {
   isAutoShortlisted Boolean           @default(false) @map("is_auto_shortlisted")
   appliedAt         DateTime          @default(now()) @map("applied_at") @db.Timestamptz(6)
   updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  candidate         Candidate         @relation(fields: [candidateId], references: [id], onDelete: Restrict)
-  job               Job               @relation(fields: [jobId], references: [id], onDelete: Restrict)
-  company           Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  resume            Resume            @relation(fields: [resumeId], references: [id], onDelete: Restrict)
+  candidate         Candidate         @relation(fields: [candidateId], references: [id])
+  company           Company           @relation(fields: [companyId], references: [id])
+  job               Job               @relation(fields: [jobId], references: [id])
+  resume            Resume            @relation(fields: [resumeId], references: [id])
   resumeAnalyses    ResumeAnalysis[]
 
   @@index([candidateId])

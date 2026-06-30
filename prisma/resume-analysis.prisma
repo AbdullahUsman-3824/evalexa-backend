@@ -10,13 +10,13 @@ model ResumeAnalysis {
   missingSkills   Json?                   @map("missing_skills")
   strengths       Json?
   weaknesses      Json?
-  aiSummary       String?                 @map("ai_summary") @db.Text
+  aiSummary       String?                 @map("ai_summary")
   recommendation  AnalysisRecommendation?
   modelVersion    String?                 @map("model_version") @db.VarChar(50)
   analysisVersion Int                     @default(1) @map("analysis_version")
   analyzedAt      DateTime                @default(now()) @map("analyzed_at") @db.Timestamptz(6)
-  application     Application             @relation(fields: [applicationId], references: [id], onDelete: Restrict)
-  job             Job                     @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  application     Application             @relation(fields: [applicationId], references: [id])
+  job             Job                     @relation(fields: [jobId], references: [id])
 
   @@index([applicationId])
   @@index([jobId])

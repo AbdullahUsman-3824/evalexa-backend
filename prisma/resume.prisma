@@ -1,18 +1,18 @@
 model Resume {
-  id                  String              @id @default(uuid()) @db.Uuid
-  candidateId         String              @map("candidate_id") @db.Uuid
-  resumeUrl           String              @map("resume_url") @db.Text
-  fileName            String?             @map("file_name") @db.VarChar(255)
-  keywords            Json?               @map("keywords")
-  description         String?             @db.Text
-  parsedData          Json?               @map("parsed_data")
-  extractedSkills     Json?               @map("extracted_skills")
-  extractedExperience Int?                @map("extracted_experience")
-  extractedEducation  String?             @map("extracted_education") @db.VarChar(255)
-  isPrimary           Boolean             @map("is_primary") @default(false)
-  uploadedAt          DateTime            @map("uploaded_at") @default(now()) @db.Timestamptz(6)
-  candidate           Candidate           @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  id                  String        @id @default(uuid()) @db.Uuid
+  candidateId         String        @map("candidate_id") @db.Uuid
+  resumeUrl           String        @map("resume_url")
+  fileName            String?       @map("file_name") @db.VarChar(255)
+  keywords            Json?         @map("keywords")
+  description         String?
+  parsedData          Json?         @map("parsed_data")
+  extractedSkills     Json?         @map("extracted_skills")
+  extractedExperience Int?          @map("extracted_experience")
+  extractedEducation  String?       @map("extracted_education") @db.VarChar(255)
+  isPrimary           Boolean       @default(false) @map("is_primary")
+  uploadedAt          DateTime      @default(now()) @map("uploaded_at") @db.Timestamptz(6)
   applications        Application[]
+  candidate           Candidate     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
   @@index([candidateId])
   @@map("resume")

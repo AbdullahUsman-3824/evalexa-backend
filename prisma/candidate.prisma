@@ -1,15 +1,15 @@
 model Candidate {
-  id           String            @id @default(uuid()) @db.Uuid
-  fullName     String            @map("full_name") @db.VarChar(255)
-  email        String?           @db.VarChar(255)
-  phone        String?           @db.VarChar(50)
-  linkedinUrl  String?           @map("linkedin_url") @db.VarChar(255)
-  portfolioUrl String?           @map("portfolio_url") @db.VarChar(255)
-  location     String?           @db.VarChar(255)
-  resumes      Resume[]
+  id           String        @id @default(uuid()) @db.Uuid
+  fullName     String        @map("full_name") @db.VarChar(255)
+  email        String?       @db.VarChar(255)
+  phone        String?       @db.VarChar(50)
+  linkedinUrl  String?       @map("linkedin_url") @db.VarChar(255)
+  portfolioUrl String?       @map("portfolio_url") @db.VarChar(255)
+  location     String?       @db.VarChar(255)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
   applications Application[]
-  createdAt    DateTime          @map("created_at") @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime          @map("updated_at") @updatedAt @db.Timestamptz(6)
+  resumes      Resume[]
 
   @@map("candidate")
 }

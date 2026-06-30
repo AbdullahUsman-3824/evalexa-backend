@@ -1,0 +1,66 @@
+model Company {
+  id          String   @id @default(uuid()) @db.Uuid
+  slug        String   @unique @db.VarChar(180)
+
+  // required
+  name        String   @db.VarChar(150)
+  industry    String   @db.VarChar(100)
+  location    String   @db.VarChar(255)
+
+  // optional
+  description String?      @db.Text
+  size                  CompanySize?
+  foundedYear           Int?
+  type                  CompanyType?
+  website               String?      @db.VarChar(255)
+  logo                  String?      @db.VarChar(500)
+  banner                String?      @db.VarChar(500)
+  email                 String?      @db.VarChar(255)
+  verificationDocuments String[]     @db.VarChar(500)
+
+  // future use
+  verificationStatus VerificationStatus @default(PENDING)
+  subscriptionPlan   SubscriptionPlan   @default(FREE)
+  isActive           Boolean            @default(true)
+
+  // relations
+  createdBy    String        @db.Uuid
+  creator      User          @relation("CompanyCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  users        User[]        @relation("CompanyMembers")
+  jobs         Job[]
+  applications Application[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("companies")
+}
+
+enum CompanySize {
+  STARTUP_1_10        @map("1-10")
+  SMALL_11_50         @map("11-50")
+  MEDIUM_51_200       @map("51-200")
+  LARGE_201_500       @map("201-500")
+  ENTERPRISE_500_PLUS @map("500+")
+}
+
+enum CompanyType {
+  STARTUP    @map("startup")
+  AGENCY     @map("agency")
+  ENTERPRISE @map("enterprise")
+  NON_PROFIT @map("non-profit")
+  GOVERNMENT @map("government")
+}
+
+enum VerificationStatus {
+  PENDING  @map("pending")
+  VERIFIED @map("verified")
+  REJECTED @map("rejected")
+}
+
+enum SubscriptionPlan {
+  FREE       @map("free")
+  BASIC      @map("basic")
+  PRO        @map("pro")
+  ENTERPRISE @map("enterprise")
+}

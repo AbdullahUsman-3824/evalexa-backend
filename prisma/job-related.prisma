@@ -3,29 +3,29 @@ model Job {
   companyId           String           @db.Uuid
   createdBy           String           @db.Uuid
   title               String           @db.VarChar(255)
-  slug                String           @unique @db.VarChar(350)
-  description         String           @db.Text
-  department          String           @db.VarChar(255)
+  description         String
   jobType             JobType
   experienceLevel     ExperienceLevel
-  educationLevel      EducationLevel   @default(ANY)
   salaryMin           Int
   salaryMax           Int
   location            String           @db.VarChar(255)
-  salaryCurrency      String           @default("PKR")
-  salaryPeriod        SalaryPeriod
   workModel           WorkModel
   status              JobStatus        @default(DRAFT)
-  responsibilities    String           @db.Text
   applicationDeadline DateTime         @db.Date
-  company             Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  creator             User             @relation("UserCreatedJobs", fields: [createdBy], references: [id], onDelete: Restrict)
-  aiConfig            JobAiConfig?
-  jobSkills           JobSkill[]
-  applications        Application[]
-  resumeAnalyses      ResumeAnalysis[]
   createdAt           DateTime         @default(now()) @db.Timestamptz(6)
   updatedAt           DateTime         @updatedAt @db.Timestamptz(6)
+  slug                String           @unique @db.VarChar(350)
+  educationLevel      EducationLevel   @default(ANY)
+  responsibilities    String
+  salaryCurrency      String           @default("PKR")
+  salaryPeriod        SalaryPeriod
+  department          String           @db.VarChar(255)
+  applications        Application[]
+  aiConfig            JobAiConfig?
+  jobSkills           JobSkill[]
+  company             Company          @relation(fields: [companyId], references: [id])
+  creator             User             @relation("UserCreatedJobs", fields: [createdBy], references: [id])
+  resumeAnalyses      ResumeAnalysis[]
 
   @@index([companyId])
   @@index([createdBy])
@@ -55,17 +55,15 @@ model JobSkill {
 }
 
 model JobAiConfig {
-  id                        String   @id @default(uuid()) @db.Uuid
-  jobId                     String   @unique @db.Uuid
-
-  enableAutoShortlist       Boolean
-  resumeSelectionCount      Int
-  enableAiInterview         Boolean
-  interviewSelectionCount   Int
-
-  job                       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  createdAt                 DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt                 DateTime @updatedAt @db.Timestamptz(6)
+  id                      String   @id @default(uuid()) @db.Uuid
+  jobId                   String   @unique @db.Uuid
+  enableAutoShortlist     Boolean
+  enableAiInterview       Boolean
+  createdAt               DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime @updatedAt @db.Timestamptz(6)
+  interviewSelectionCount Int
+  resumeSelectionCount    Int
+  job                     Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@map("job_ai_config")
 }
