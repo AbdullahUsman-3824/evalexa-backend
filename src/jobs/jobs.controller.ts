@@ -29,17 +29,17 @@ export class JobsController {
 
   @Get()
   findAll(@User() user: JwtPayload, @Query() query: FindJobsQueryDto) {
-    return this.jobsService.findAll(user.companyId, query);
+    return this.jobsService.findAll(user.sub, user.companyId, query);
   }
 
   @Get('titles')
   findTitles(@User() user: JwtPayload) {
-    return this.jobsService.findTitles(user.companyId);
+    return this.jobsService.findTitles(user.sub, user.companyId);
   }
 
   @Get(':id')
   findOne(@User() user: JwtPayload, @Param('id') id: string) {
-    return this.jobsService.findOne(user.companyId, id);
+    return this.jobsService.findOne(user.sub, user.companyId, id);
   }
 
   @Patch(':id')

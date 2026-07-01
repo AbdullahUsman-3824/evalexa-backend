@@ -139,15 +139,33 @@ const publicJobSelect = {
 export class JobsService {
   constructor(private readonly db: DatabaseService) {}
 
-  async findTitles(companyId: string | null | undefined) {
-    if (!companyId) {
+  private async resolveCompanyId(
+    userId: string,
+    companyId: string | null | undefined,
+  ): Promise<string> {
+    if (companyId) {
+      return companyId;
+    }
+
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      select: { companyId: true },
+    });
+
+    if (!user?.companyId) {
       throw new BadRequestException(
-        'Recruiter must have a company to list jobs',
+        'Recruiter must have a company before performing this action',
       );
     }
 
+    return user.companyId;
+  }
+
+  async findTitles(userId: string, companyId: string | null | undefined) {
+    const ownedCompanyId = await this.resolveCompanyId(userId, companyId);
+
     return this.db.job.findMany({
-      where: { companyId },
+      where: { companyId: ownedCompanyId },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -202,16 +220,6 @@ export class JobsService {
     }
 
     throw new ConflictException('Could not generate a unique job slug');
-  }
-
-  private requireCompanyId(companyId: string | null | undefined): string {
-    if (!companyId) {
-      throw new BadRequestException(
-        'Recruiter must have a company before posting jobs',
-      );
-    }
-
-    return companyId;
   }
 
   private async ensureSkillsExist(skillIds: string[]) {
@@ -532,7 +540,7 @@ export class JobsService {
   ) {
     this.validateSalaryRange(dto.salary.min, dto.salary.max);
 
-    const ownedCompanyId = this.requireCompanyId(companyId);
+    const ownedCompanyId = await this.resolveCompanyId(userId, companyId);
 
     return this.db.$transaction(async (transaction) => {
       const company = await transaction.company.findUnique({
@@ -590,8 +598,12 @@ export class JobsService {
     });
   }
 
-  async findAll(companyId: string | null | undefined, query: FindJobsQueryDto) {
-    const ownedCompanyId = this.requireCompanyId(companyId);
+  async findAll(
+    userId: string,
+    companyId: string | null | undefined,
+    query: FindJobsQueryDto,
+  ) {
+    const ownedCompanyId = await this.resolveCompanyId(userId, companyId);
 
     const where: Prisma.JobWhereInput = {
       companyId: ownedCompanyId,
@@ -626,8 +638,12 @@ export class JobsService {
     });
   }
 
-  async findOne(companyId: string | null | undefined, id: string) {
-    const ownedCompanyId = this.requireCompanyId(companyId);
+  async findOne(
+    userId: string,
+    companyId: string | null | undefined,
+    id: string,
+  ) {
+    const ownedCompanyId = await this.resolveCompanyId(userId, companyId);
 
     const job = await this.db.job.findFirst({
       where: {
@@ -650,7 +666,7 @@ export class JobsService {
     id: string,
     dto: UpdateJobDto,
   ) {
-    const ownedCompanyId = this.requireCompanyId(companyId);
+    const ownedCompanyId = await this.resolveCompanyId(userId, companyId);
 
     const currentJob = await this.db.job.findFirst({
       where: {

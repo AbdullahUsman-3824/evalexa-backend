@@ -11,6 +11,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { CompanySize, CompanyType } from '@prisma/client';
+import { Type } from 'class-transformer'
 
 export class CreateCompanyDto {
   // required
@@ -39,6 +40,7 @@ export class CreateCompanyDto {
   @IsOptional()
   @IsInt()
   @Max(new Date().getFullYear())
+  @Type(() => Number)
   foundedYear?: number;
 
   @IsOptional()

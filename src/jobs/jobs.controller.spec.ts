@@ -53,10 +53,8 @@ describe('JobsController', () => {
     };
 
     await controller.create(user, dto as never);
-
     expect(jobsService.create).toHaveBeenCalledWith(
       '11111111-1111-1111-1111-111111111111',
-      '44444444-4444-4444-4444-444444444444',
       dto,
     );
   });
@@ -70,9 +68,8 @@ describe('JobsController', () => {
     const query = { status: 'draft', sortBy: 'newest' };
 
     await controller.findAll(user, query as never);
-
     expect(jobsService.findAll).toHaveBeenCalledWith(
-      '44444444-4444-4444-4444-444444444444',
+      '11111111-1111-1111-1111-111111111111',
       query,
     );
   });
@@ -85,9 +82,8 @@ describe('JobsController', () => {
     };
 
     await controller.findOne(user, '55555555-5555-5555-5555-555555555555');
-
     expect(jobsService.findOne).toHaveBeenCalledWith(
-      '44444444-4444-4444-4444-444444444444',
+      '11111111-1111-1111-1111-111111111111',
       '55555555-5555-5555-5555-555555555555',
     );
   });
@@ -105,10 +101,8 @@ describe('JobsController', () => {
       '55555555-5555-5555-5555-555555555555',
       dto as never,
     );
-
     expect(jobsService.update).toHaveBeenCalledWith(
       '11111111-1111-1111-1111-111111111111',
-      '44444444-4444-4444-4444-444444444444',
       '55555555-5555-5555-5555-555555555555',
       dto,
     );
