@@ -18,7 +18,7 @@ export class JwtAuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<RequestWithUser>();
-    const token = this.extractTokenFromHeader(request);
+    const token = this.extractToken(request);
 
     if (!token) {
       throw new UnauthorizedException('Missing authorization token');
@@ -34,15 +34,22 @@ export class JwtAuthGuard implements CanActivate {
     return true;
   }
 
-  private extractTokenFromHeader(request: Request): string | undefined {
-    const authorization = request.headers.authorization;
+  private extractToken(request: Request): string | undefined {
+   
+    const cookieToken = (request as Request & { cookies?: Record<string, string> })
+      .cookies?.token;
 
+    if (cookieToken) {
+      return cookieToken;
+    }
+
+    // Fallback: Authorization header (future mobile client ke liye useful)
+    const authorization = request.headers.authorization;
     if (!authorization) {
       return undefined;
     }
 
     const [type, token] = authorization.split(' ');
-
     if (type !== 'Bearer' || !token) {
       return undefined;
     }

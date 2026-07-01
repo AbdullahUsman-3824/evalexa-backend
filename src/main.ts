@@ -8,6 +8,7 @@ import {
   type Response,
 } from 'express';
 import { AppModule } from './app.module';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -35,6 +36,7 @@ async function bootstrap() {
       extended: true,
     }),
   );
+  app.use(cookieParser());
 
   // Handle stringified JSON bodies
   app.use((req: Request, _res: Response, next: NextFunction) => {

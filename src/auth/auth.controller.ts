@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Res, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { User } from './decorators/user.decorator';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -12,6 +12,7 @@ import { LocalAuthGuard } from './guards/local-auth.guard';
 import type { AuthenticatedUser } from './interfaces/authenticated-user.interface';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 import { UsersService } from '../users/users.service';
+import type { Response } from 'express';
 
 @Controller('auth')
 export class AuthController {
@@ -52,17 +53,35 @@ export class AuthController {
     );
   }
 
-  @UseGuards(LocalAuthGuard)
+ @UseGuards(LocalAuthGuard)
   @Post('login')
   async login(
     @Body() loginDto: LoginDto,
     @User() user: AuthenticatedUser | undefined,
+    @Res({ passthrough: true }) res: Response,
   ) {
     const authenticatedUser =
       user ??
       (await this.authService.validateUser(loginDto.email, loginDto.password));
 
-    return this.authService.login(authenticatedUser);
+    const { access_token, user: userData } =
+      await this.authService.login(authenticatedUser);
+
+    res.cookie('token', access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days, match your JWT expiry
+      path: '/',
+    });
+
+    return { user: userData };
+  }
+
+  @Post('logout')
+  logout(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie('token', { path: '/' });
+    return { message: 'Logged out successfully' };
   }
 
   @UseGuards(JwtAuthGuard)
