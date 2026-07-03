@@ -17,6 +17,7 @@ type LoginUserResponse = {
   id: string;
   fullName: string;
   email: string;
+  phone: string;
   role: string;
   companyId: string | null;
   isVerified: boolean;
@@ -347,6 +348,7 @@ export class AuthService {
         id: user.id,
         fullName: user.fullName,
         email: user.email,
+        phone:user.phone,
         role: user.role,
         companyId: user.companyId,
         isVerified: user.isVerified,
