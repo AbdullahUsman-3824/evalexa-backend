@@ -5,7 +5,6 @@ import {
   IsEmail,
   IsOptional,
   IsString,
-  IsUUID,
   ValidateNested,
 } from 'class-validator';
 
@@ -84,18 +83,6 @@ class ExperienceDto {
 }
 
 export class PublicJobApplicationDto {
-  @IsOptional()
-  @IsUUID()
-  candidateId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  resumeId?: string;
-
-  @IsOptional()
-  @IsString()
-  resumeUrl?: string;
-
   @ValidateNested()
   @Type(() => PersonalDto)
   personal!: PersonalDto;
@@ -109,12 +96,4 @@ export class PublicJobApplicationDto {
   @ValidateNested({ each: true })
   @Type(() => ExperienceDto)
   experience!: ExperienceDto[];
-
-  @IsOptional()
-  @IsUUID()
-  jobId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  companyId?: string;
 }

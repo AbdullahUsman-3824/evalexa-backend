@@ -1,20 +1,16 @@
-import {
-  GoneException,
-  Injectable,
-} from '@nestjs/common';
+import { GoneException, Injectable } from '@nestjs/common';
 import { ApplicationService } from '../../application/application.service';
 import { ApplyWithParsedDto } from '../../application/dto/apply-with-parsed.dto';
 import { JobsService } from '../../jobs/jobs.service';
-import { ResumeService } from '../../resume/resume.service';
 import { PublicJobApplicationDto } from '../dto/public-job-application.dto';
 import { PublicJobsQueryDto } from '../dto/public-jobs-query.dto';
+import { UploadedResumeFileDto } from '../../resume/dto/uploaded-resume-file.dto';
 
 @Injectable()
 export class PublicJobsService {
   constructor(
     private readonly jobsService: JobsService,
     private readonly applicationService: ApplicationService,
-    private readonly resumeService: ResumeService,
   ) {}
 
   async findAll(query: PublicJobsQueryDto) {
@@ -33,44 +29,21 @@ export class PublicJobsService {
     return this.jobsService.findSimilarPublicJobs(jobSlug);
   }
 
-  private mapResumeEducation(
-    education: Awaited<
-      ReturnType<ResumeService['uploadAndProcess']>
-    >['education'],
-  ): ApplyWithParsedDto['education'] {
-    return education
-      .filter((item) => item.institution || item.degree || item.field)
-      .map((item) => ({
-        school: item.institution?.trim() || 'Unknown',
-        fieldOfStudy: item.field ?? undefined,
-        degree: item.degree ?? undefined,
-        startDate: item.startDate ?? undefined,
-        endDate: item.endDate ?? undefined,
-      }));
-  }
-
-  private mapResumeExperience(
-    experience: Awaited<
-      ReturnType<ResumeService['uploadAndProcess']>
-    >['experience'],
-  ): ApplyWithParsedDto['experience'] {
-    return experience
-      .filter((item) => item.title || item.company || item.description)
-      .map((item) => ({
-        title: item.title?.trim() || 'Unknown',
-        company: item.company ?? undefined,
-        industry: undefined,
-        summary: item.description ?? undefined,
-        startDate: item.startDate ?? undefined,
-        endDate: item.endDate ?? undefined,
-        isCurrent: item.isCurrent,
-      }));
-  }
-
-  async applyToJobWithParsedData(jobSlug: string, dto: PublicJobApplicationDto) {
+  /**
+   * jobId/companyId are ALWAYS resolved here from the trusted slug lookup,
+   * never taken from the client-supplied dto. PublicJobApplicationDto must
+   * not declare jobId/companyId fields at all — see the DTO file — so
+   * there's no ambiguity about which value wins.
+   */
+  async applyToJobWithParsedData(
+    jobSlug: string,
+    dto: PublicJobApplicationDto,
+    file: UploadedResumeFileDto,
+  ) {
     const job = await this.jobsService.findPublicJobBySlug(jobSlug);
 
-    if (job.applicationDeadline < new Date()) {
+    const deadline = new Date(job.applicationDeadline);
+    if (deadline < new Date()) {
       throw new GoneException('This job posting has expired');
     }
 
@@ -80,6 +53,6 @@ export class PublicJobsService {
       companyId: job.company.id,
     };
 
-    return this.applicationService.applyWithParsedData(applicationDto);
+    return this.applicationService.applyWithParsedData(applicationDto, file);
   }
 }
