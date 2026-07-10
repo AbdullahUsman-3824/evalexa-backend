@@ -35,6 +35,7 @@ export interface ResumeExperience {
   company?: string;
   startDate?: string;
   endDate?: string;
+  isCurrent?: boolean;
   description?: string;
 }
 

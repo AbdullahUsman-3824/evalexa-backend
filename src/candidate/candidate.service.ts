@@ -4,6 +4,8 @@ import { DatabaseService } from '../database/database.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
 
+type Db = DatabaseService | Prisma.TransactionClient;
+
 @Injectable()
 export class CandidateService {
   constructor(private readonly db: DatabaseService) {}
@@ -90,15 +92,15 @@ export class CandidateService {
     },
   } satisfies Prisma.CandidateSelect;
 
-  async createCandidate(dto: CreateCandidateDto) {
+  async createCandidate(dto: CreateCandidateDto, db: Db = this.db) {
     const email = dto.email ? this.normalizeEmail(dto.email) : undefined;
-    const existingCandidate = await this.findByEmail(email);
+    const existingCandidate = await this.findByEmail(email, db);
 
     if (existingCandidate) {
       return existingCandidate;
     }
 
-    return this.db.candidate.create({
+    return db.candidate.create({
       data: {
         ...dto,
         ...(email ? { email } : {}),
@@ -107,19 +109,19 @@ export class CandidateService {
     });
   }
 
-  findByEmail(email?: string | null) {
+  findByEmail(email: string | undefined | null, db: Db = this.db) {
     if (!email) {
       return null;
     }
 
-    return this.db.candidate.findFirst({
+    return db.candidate.findFirst({
       where: { email: this.normalizeEmail(email) },
       select: this.candidatePublicSelect,
     });
   }
 
-  findById(id: string) {
-    return this.db.candidate.findUnique({
+  findById(id: string, db: Db = this.db) {
+    return db.candidate.findUnique({
       where: { id },
       select: this.candidatePublicSelect,
     });
@@ -158,8 +160,8 @@ export class CandidateService {
     });
   }
 
-  async updateCandidate(id: string, dto: UpdateCandidateDto) {
-    const candidate = await this.db.candidate.findUnique({
+  async updateCandidate(id: string, dto: UpdateCandidateDto, db: Db = this.db) {
+    const candidate = await db.candidate.findUnique({
       where: { id },
       select: { id: true },
     });
@@ -172,7 +174,7 @@ export class CandidateService {
     const rest = dto;
 
     try {
-      return await this.db.candidate.update({
+      return await db.candidate.update({
         where: { id },
         data: {
           ...rest,

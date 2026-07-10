@@ -84,20 +84,8 @@ class ApplyWithParsedExperienceDto {
 }
 
 export class ApplyWithParsedDto {
-  @IsOptional()
-  @IsUUID()
-  candidateId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  resumeId?: string;
-
-  @IsOptional()
-  @IsString()
-  resumeUrl?: string;
-
   @ValidateNested()
-  @Type(() => ApplyWithParsedPersonalDto)
+  @Type(() => ApplyWithParsedPersonalDto) 
   personal!: ApplyWithParsedPersonalDto;
 
   @IsArray()

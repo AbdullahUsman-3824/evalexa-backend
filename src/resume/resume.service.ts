@@ -3,33 +3,35 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CandidateService } from '../candidate/candidate.service';
+import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { SupabaseService } from '../database/supabase.service';
 import {
   AutofillEducationDto,
   AutofillExperienceDto,
   AutofillPersonalDto,
-  ResumeUploadResponseDto,
+  ResumeParsePreviewDto,
 } from './dto/resume-upload-response.dto';
 import { UploadedResumeFileDto } from './dto/uploaded-resume-file.dto';
 import { ResumeParserService, ParsedResumeData } from './resume-parser.service';
 
-// ─── Service ──────────────────────────────────────────────────────────────────
+type Db = DatabaseService | Prisma.TransactionClient;
 
 @Injectable()
 export class ResumeService {
   constructor(
     private readonly db: DatabaseService,
-    private readonly candidateService: CandidateService,
     private readonly resumeParser: ResumeParserService,
     private readonly supabaseService: SupabaseService,
   ) {}
 
-  async uploadAndProcess(
+  /**
+   * Parse-only, no persistence. Used by POST /resume/parse for the public
+   * form's autofill preview.
+   */
+  async parseResumePreview(
     file: UploadedResumeFileDto,
-    candidateId?: string,
-  ): Promise<ResumeUploadResponseDto> {
+  ): Promise<ResumeParsePreviewDto> {
     const parsed = await this.resumeParser.parseResume(
       file.buffer,
       file.originalname,
@@ -39,27 +41,84 @@ export class ResumeService {
       throw new BadRequestException('Parser returned empty result');
     }
 
-    const candidate = await this.resolveCandidate(parsed, candidateId);
+    return this.buildAutofillResponse(parsed);
+  }
+
+  /**
+   * Step 1 of finalization — everything that is NOT rollback-safe under a
+   * Prisma transaction (parsing hits the FastAPI service, upload hits
+   * Supabase storage). Call this BEFORE opening a db.$transaction.
+   */
+  async prepareForFinalization(
+    file: UploadedResumeFileDto,
+  ): Promise<{ parsed: ParsedResumeData; resumeUrl: string }> {
+    const parsed = await this.resumeParser.parseResume(
+      file.buffer,
+      file.originalname,
+    );
+
+    if (!parsed) {
+      throw new BadRequestException('Parser returned empty result');
+    }
 
     const resumeUrl = await this.uploadToSupabase(file);
 
-    const resume = await this.createResumeRecord({
-      candidateId: candidate.id,
-      resumeUrl,
-      fileName: file.originalname,
-      parsed,
-    });
+    return { parsed, resumeUrl };
+  }
 
-    return this.buildAutofillResponse({
-      candidateId: candidate.id,
-      resumeId: resume.id,
-      resumeUrl,
-      parsed,
+  /**
+   * Step 2 of finalization — the actual DB row. Pass a transaction client
+   * so this participates in the caller's atomic candidate+resume+
+   * application write.
+   */
+  async saveResumeRecord(
+    params: {
+      candidateId: string;
+      resumeUrl: string;
+      fileName: string;
+      parsed: ParsedResumeData;
+    },
+    db: Db = this.db,
+  ) {
+    const { candidateId, resumeUrl, fileName, parsed } = params;
+
+    const extractedSkills = this.extractSkills(parsed.skills);
+    const extractedExperience =
+      typeof parsed.meta?.totalExperienceMonths === 'number'
+        ? parsed.meta.totalExperienceMonths
+        : null;
+    const extractedEducation = parsed.education?.[0]?.degree ?? null;
+
+    return db.resume.create({
+      data: {
+        candidateId,
+        resumeUrl,
+        fileName,
+        parsedData: parsed as unknown as object,
+        extractedSkills: extractedSkills as unknown as object,
+        extractedExperience,
+        extractedEducation,
+        isPrimary: false,
+      },
     });
   }
 
-  async findById(id: string) {
-    return this.db.resume.findUnique({
+  /**
+   * Cleanup: called when a transaction fails AFTER the file was already
+   * uploaded to storage (Prisma can roll back the row insert, but not the
+   * external storage write).
+   */
+  async deleteStorageFile(resumeUrl: string): Promise<void> {
+    const storagePath = this.storagePathFromUrl(resumeUrl);
+    if (!storagePath) return;
+
+    const supabase = this.supabaseService.getClient();
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET ?? 'resumes';
+    await supabase.storage.from(bucket).remove([storagePath]);
+  }
+
+  async findById(id: string, db: Db = this.db) {
+    return db.resume.findUnique({
       where: { id },
       select: {
         id: true,
@@ -69,14 +128,17 @@ export class ResumeService {
     });
   }
 
-  async createResume(data: {
-    candidateId: string;
-    resumeUrl: string;
-    parsedData?: object;
-    extractedEducation?: string | null;
-    extractedExperience?: number | null;
-  }) {
-    return this.db.resume.create({
+  async createResume(
+    data: {
+      candidateId: string;
+      resumeUrl: string;
+      parsedData?: object;
+      extractedEducation?: string | null;
+      extractedExperience?: number | null;
+    },
+    db: Db = this.db,
+  ) {
+    return db.resume.create({
       data: {
         candidateId: data.candidateId,
         resumeUrl: data.resumeUrl,
@@ -101,14 +163,15 @@ export class ResumeService {
       extractedEducation?: string | null;
       extractedExperience?: number | null;
     },
+    db: Db = this.db,
   ) {
-    const existing = await this.findById(id);
+    const existing = await this.findById(id, db);
 
     if (!existing) {
       throw new NotFoundException(`Resume with id ${id} not found`);
     }
 
-    return this.db.resume.update({
+    return db.resume.update({
       where: { id },
       data,
       select: {
@@ -118,43 +181,7 @@ export class ResumeService {
     });
   }
 
-  private async resolveCandidate(
-    parsed: ParsedResumeData,
-    candidateId?: string,
-  ) {
-    const basics = parsed.basics ?? ({} as ParsedResumeData['basics']);
-    const fullName = this.normalizeText(basics.fullName) ?? 'Unknown';
-    const email = this.normalizeEmail(basics.email);
-    const phone = this.normalizeText(basics.phone);
-    const linkedinUrl = this.normalizeText(basics.linkedinUrl);
-    const location = this.normalizeText(basics.location);
-
-    if (candidateId) {
-      const existing = await this.candidateService.findById(candidateId);
-
-      if (!existing) {
-        throw new NotFoundException(
-          `Candidate with id ${candidateId} not found`,
-        );
-      }
-
-      return existing;
-    }
-
-    if (email) {
-      const byEmail = await this.candidateService.findByEmail(email);
-
-      if (byEmail) return byEmail;
-    }
-
-    return this.candidateService.createCandidate({
-      fullName,
-      email: email ?? undefined,
-      phone: phone ?? undefined,
-      linkedinUrl: linkedinUrl ?? undefined,
-      location: location ?? undefined,
-    });
-  }
+  // ─── Private helpers ────────────────────────────────────────────────────
 
   private async uploadToSupabase(file: UploadedResumeFileDto): Promise<string> {
     const supabase = this.supabaseService.getClient();
@@ -178,46 +205,10 @@ export class ResumeService {
     return data.publicUrl;
   }
 
-  private async createResumeRecord(params: {
-    candidateId: string;
-    resumeUrl: string;
-    fileName: string;
-    parsed: ParsedResumeData;
-  }) {
-    const { candidateId, resumeUrl, fileName, parsed } = params;
-
-    const extractedSkills = this.extractSkills(parsed.skills);
-
-    const extractedExperience =
-      typeof parsed.meta?.totalExperienceMonths === 'number'
-        ? parsed.meta.totalExperienceMonths
-        : null;
-
-    const extractedEducation = parsed.education?.[0]?.degree ?? null;
-
-    return this.db.resume.create({
-      data: {
-        candidateId,
-        resumeUrl,
-        fileName,
-        parsedData: parsed as unknown as object,
-        extractedSkills: extractedSkills as unknown as object,
-        extractedExperience,
-        extractedEducation,
-        isPrimary: false,
-      },
-    });
-  }
-
-  private buildAutofillResponse(params: {
-    candidateId: string;
-    resumeId: string;
-    resumeUrl: string;
-    parsed: ParsedResumeData;
-  }): ResumeUploadResponseDto {
-    const { candidateId, resumeId, resumeUrl, parsed } = params;
+  private buildAutofillResponse(
+    parsed: ParsedResumeData,
+  ): ResumeParsePreviewDto {
     const basics = parsed.basics ?? ({} as ParsedResumeData['basics']);
-
     const fullName = this.normalizeText(basics.fullName) ?? 'Unknown';
     const { firstName, lastName } = this.splitName(fullName);
 
@@ -234,9 +225,6 @@ export class ResumeService {
     };
 
     return {
-      candidateId,
-      resumeId,
-      resumeUrl,
       personal,
       education: this.mapEducation(parsed.education),
       experience: this.mapExperience(parsed.experience),
@@ -245,16 +233,10 @@ export class ResumeService {
 
   private splitName(fullName: string): { firstName: string; lastName: string } {
     const trimmed = fullName.trim();
-
-    if (!trimmed) {
-      return { firstName: 'Unknown', lastName: '' };
-    }
+    if (!trimmed) return { firstName: 'Unknown', lastName: '' };
 
     const parts = trimmed.split(/\s+/).filter(Boolean);
-
-    if (parts.length === 0) {
-      return { firstName: 'Unknown', lastName: '' };
-    }
+    if (parts.length === 0) return { firstName: 'Unknown', lastName: '' };
 
     return {
       firstName: parts[0] ?? 'Unknown',
@@ -263,33 +245,18 @@ export class ResumeService {
   }
 
   private formatDate(date: string | null | undefined): string | null {
-    if (!date) {
-      return null;
-    }
-
+    if (!date) return null;
     const trimmed = date.trim();
-
-    if (!trimmed) {
-      return null;
-    }
+    if (!trimmed) return null;
 
     const isoMonthMatch = trimmed.match(/^(\d{4})-(\d{2})/);
-
-    if (isoMonthMatch) {
-      return `${isoMonthMatch[2]}/${isoMonthMatch[1]}`;
-    }
+    if (isoMonthMatch) return `${isoMonthMatch[2]}/${isoMonthMatch[1]}`;
 
     const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{4})$/);
-
-    if (slashMatch) {
-      return `${slashMatch[1].padStart(2, '0')}/${slashMatch[2]}`;
-    }
+    if (slashMatch) return `${slashMatch[1].padStart(2, '0')}/${slashMatch[2]}`;
 
     const yearMatch = trimmed.match(/^(\d{4})$/);
-
-    if (yearMatch) {
-      return `01/${yearMatch[1]}`;
-    }
+    if (yearMatch) return `01/${yearMatch[1]}`;
 
     return null;
   }
@@ -297,9 +264,7 @@ export class ResumeService {
   private mapEducation(
     educationList: ParsedResumeData['education'],
   ): AutofillEducationDto[] {
-    if (!Array.isArray(educationList)) {
-      return [];
-    }
+    if (!Array.isArray(educationList)) return [];
 
     return educationList.map((education) => ({
       degree: this.normalizeText(education.degree),
@@ -314,24 +279,20 @@ export class ResumeService {
   private mapExperience(
     experienceList: ParsedResumeData['experience'],
   ): AutofillExperienceDto[] {
-    if (!Array.isArray(experienceList)) {
-      return [];
-    }
+    if (!Array.isArray(experienceList)) return [];
 
     return experienceList.map((experience) => ({
       title: this.normalizeText(experience.title),
       company: this.normalizeText(experience.company),
       startDate: this.formatDate(experience.startDate),
       endDate: experience.endDate ? this.formatDate(experience.endDate) : null,
-      isCurrent: !experience.endDate,
+      isCurrent: Boolean((experience as { isCurrent?: boolean }).isCurrent),
       description: this.normalizeText(experience.description),
     }));
   }
 
   private extractSkills(skills: ParsedResumeData['skills']): string[] {
-    if (!Array.isArray(skills)) {
-      return [];
-    }
+    if (!Array.isArray(skills)) return [];
 
     return Array.from(
       new Set(
@@ -343,10 +304,7 @@ export class ResumeService {
   }
 
   private normalizeText(value: string | null | undefined): string | null {
-    if (typeof value !== 'string') {
-      return null;
-    }
-
+    if (typeof value !== 'string') return null;
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
   }
@@ -360,7 +318,11 @@ export class ResumeService {
     const extension = fileName.includes('.')
       ? fileName.slice(fileName.lastIndexOf('.'))
       : '';
-
     return `${Date.now()}-${crypto.randomUUID()}${extension}`;
+  }
+
+  private storagePathFromUrl(resumeUrl: string): string | null {
+    const match = resumeUrl.match(/\/object\/public\/[^/]+\/(.+)$/);
+    return match?.[1] ?? null;
   }
 }

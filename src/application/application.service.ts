@@ -14,6 +14,7 @@ import { isUUID } from 'class-validator';
 import { CandidateService } from '../candidate/candidate.service';
 import { DatabaseService } from '../database/database.service';
 import { ResumeService } from '../resume/resume.service';
+import { UploadedResumeFileDto } from '../resume/dto/uploaded-resume-file.dto';
 import { ApplyWithParsedDto } from './dto/apply-with-parsed.dto';
 
 const jobApplicationsSelect = {
@@ -55,10 +56,7 @@ export class ApplicationService {
   ) {}
 
   private normalizeText(value?: string | null): string | undefined {
-    if (typeof value !== 'string') {
-      return undefined;
-    }
-
+    if (typeof value !== 'string') return undefined;
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : undefined;
   }
@@ -82,10 +80,7 @@ export class ApplicationService {
     education: ApplyWithParsedDto['education'],
   ): string | null {
     const first = education[0];
-
-    if (!first) {
-      return null;
-    }
+    if (!first) return null;
 
     const parts = [
       this.normalizeText(first.degree),
@@ -98,42 +93,26 @@ export class ApplicationService {
 
   private parseDate(dateText?: string): Date | null {
     const normalized = this.normalizeText(dateText);
-
-    if (!normalized) {
-      return null;
-    }
+    if (!normalized) return null;
 
     const parsedDate = new Date(normalized);
-
-    if (Number.isNaN(parsedDate.getTime())) {
-      return null;
-    }
-
-    return parsedDate;
+    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
   }
 
   private calculateExperienceMonths(
     experience: ApplyWithParsedDto['experience'],
   ): number | null {
-    if (!Array.isArray(experience) || experience.length === 0) {
-      return null;
-    }
+    if (!Array.isArray(experience) || experience.length === 0) return null;
 
     const now = new Date();
     let totalMonths = 0;
 
     for (const item of experience) {
       const start = this.parseDate(item.startDate);
-
-      if (!start) {
-        continue;
-      }
+      if (!start) continue;
 
       const end = item.isCurrent ? now : (this.parseDate(item.endDate) ?? now);
-
-      if (end < start) {
-        continue;
-      }
+      if (end < start) continue;
 
       const months =
         (end.getFullYear() - start.getFullYear()) * 12 +
@@ -145,101 +124,6 @@ export class ApplicationService {
     return totalMonths > 0 ? totalMonths : null;
   }
 
-  private buildParsedData(dto: ApplyWithParsedDto): object {
-    return {
-      personal: dto.personal,
-      education: dto.education,
-      experience: dto.experience,
-    };
-  }
-
-  private async resolveCandidate(dto: ApplyWithParsedDto) {
-    const fullName = this.buildFullName(
-      dto.personal.firstName,
-      dto.personal.lastName,
-    );
-
-    const safeFullName = fullName || 'Unknown';
-    const email = this.normalizeEmail(dto.personal.email);
-
-    const patch = this.safeUpdate({
-      fullName: safeFullName,
-      email,
-      phone: this.normalizeText(dto.personal.phone),
-      location: this.normalizeText(dto.personal.address),
-    });
-
-    if (dto.candidateId) {
-      const existing = await this.candidateService.findById(dto.candidateId);
-
-      if (!existing) {
-        throw new NotFoundException(
-          `Candidate with id ${dto.candidateId} not found`,
-        );
-      }
-
-      return this.candidateService.updateCandidate(dto.candidateId, patch);
-    }
-
-    if (email) {
-      const existingByEmail = await this.candidateService.findByEmail(email);
-
-      if (existingByEmail) {
-        return existingByEmail;
-      }
-    }
-
-    return this.candidateService.createCandidate(
-      patch as {
-        fullName: string;
-        email?: string;
-        phone?: string;
-        location?: string;
-      },
-    );
-  }
-
-  private async resolveResume(dto: ApplyWithParsedDto, candidateId: string) {
-    const extractedEducation = this.mapEducationToResumeField(dto.education);
-    const extractedExperience = this.calculateExperienceMonths(dto.experience);
-    const parsedData = this.buildParsedData(dto);
-
-    if (dto.resumeId) {
-      const existingResume = await this.resumeService.findById(dto.resumeId);
-
-      if (!existingResume) {
-        throw new NotFoundException(`Resume with id ${dto.resumeId} not found`);
-      }
-
-      return this.resumeService.updateResume(
-        dto.resumeId,
-        this.safeUpdate({
-          candidateId,
-          resumeUrl: this.normalizeText(dto.resumeUrl),
-          parsedData,
-          extractedEducation,
-          extractedExperience,
-        }),
-      );
-    }
-
-    const resumeUrl = this.normalizeText(dto.resumeUrl);
-
-    if (!resumeUrl) {
-      throw new BadRequestException(
-        'resumeUrl is required when creating a new resume',
-      );
-    }
-
-    return this.resumeService.createResume({
-      candidateId,
-      resumeUrl,
-      parsedData,
-      extractedEducation,
-      extractedExperience,
-    });
-  }
-
   private async ensureJobAndCompanyExist(jobId: string, companyId: string) {
     const [job, company] = await Promise.all([
       this.db.job.findUnique({ where: { id: jobId }, select: { id: true } }),
@@ -249,10 +133,7 @@ export class ApplicationService {
       }),
     ]);
 
-    if (!job) {
-      throw new NotFoundException(`Job with id ${jobId} not found`);
-    }
-
+    if (!job) throw new NotFoundException(`Job with id ${jobId} not found`);
     if (!company) {
       throw new NotFoundException(`Company with id ${companyId} not found`);
     }
@@ -260,15 +141,8 @@ export class ApplicationService {
 
   async findByCandidateAndJob(candidateId: string, jobId: string) {
     return this.db.application.findFirst({
-      where: {
-        candidateId,
-        jobId,
-      },
-      select: {
-        id: true,
-        status: true,
-        appliedAt: true,
-      },
+      where: { candidateId, jobId },
+      select: { id: true, status: true, appliedAt: true },
     });
   }
 
@@ -278,76 +152,119 @@ export class ApplicationService {
         'Recruiter must have a company to list job applications',
       );
     }
-
     if (!isUUID(jobId)) {
       throw new BadRequestException('jobId must be a valid UUID');
     }
 
     const [job, applications] = await Promise.all([
       this.db.job.findFirst({
-        where: {
-          id: jobId,
-          companyId,
-        },
-        select: {
-          id: true,
-        },
+        where: { id: jobId, companyId },
+        select: { id: true },
       }),
       this.db.application.findMany({
-        where: {
-          jobId,
-          companyId,
-        },
-        orderBy: {
-          appliedAt: 'desc',
-        },
+        where: { jobId, companyId },
+        orderBy: { appliedAt: 'desc' },
         select: jobApplicationsSelect,
       }),
     ]);
 
-    if (!job) {
-      throw new NotFoundException('Job not found');
-    }
-
+    if (!job) throw new NotFoundException('Job not found');
     return applications;
   }
 
-  async applyWithParsedData(dto: ApplyWithParsedDto) {
+  async applyWithParsedData(dto: ApplyWithParsedDto, file: UploadedResumeFileDto) {
     await this.ensureJobAndCompanyExist(dto.jobId, dto.companyId);
 
-    const candidate = await this.resolveCandidate(dto);
-    const resume = await this.resolveResume(dto, candidate.id);
+    // External calls (FastAPI parse + Supabase upload) happen BEFORE the
+    // transaction opens, since Prisma can't roll either of them back.
+    const { parsed, resumeUrl } =
+      await this.resumeService.prepareForFinalization(file);
 
-    const existingApplication = await this.findByCandidateAndJob(
-      candidate.id,
-      dto.jobId,
-    );
+    try {
+      return await this.db.$transaction(async (tx) => {
+        const fullName = this.buildFullName(
+          dto.personal.firstName,
+          dto.personal.lastName,
+        );
+        const email = this.normalizeEmail(dto.personal.email);
 
-    if (existingApplication) {
-      throw new ConflictException('Application already exists for this job');
+        const candidatePatch = this.safeUpdate({
+          fullName: fullName || 'Unknown',
+          email,
+          phone: this.normalizeText(dto.personal.phone),
+          location: this.normalizeText(dto.personal.address),
+        });
+
+        const existingByEmail = email
+          ? await this.candidateService.findByEmail(email, tx)
+          : null;
+
+        const candidate = existingByEmail
+          ? await this.candidateService.updateCandidate(
+              existingByEmail.id,
+              candidatePatch,
+              tx,
+            )
+          : await this.candidateService.createCandidate(
+              candidatePatch as {
+                fullName: string;
+                email?: string;
+                phone?: string;
+                location?: string;
+              },
+              tx,
+            );
+
+        const existingApplication = await tx.application.findFirst({
+          where: { candidateId: candidate.id, jobId: dto.jobId },
+          select: { id: true },
+        });
+
+        if (existingApplication) {
+          throw new ConflictException(
+            'Application already exists for this job',
+          );
+        }
+
+        const resume = await this.resumeService.saveResumeRecord(
+          {
+            candidateId: candidate.id,
+            resumeUrl,
+            fileName: file.originalname,
+            parsed,
+          },
+          tx,
+        );
+
+        const application = await tx.application.create({
+          data: {
+            candidateId: candidate.id,
+            jobId: dto.jobId,
+            companyId: dto.companyId,
+            resumeId: resume.id,
+            status: ApplicationStatus.APPLIED,
+            screeningStage: ScreeningStage.NOT_STARTED,
+            source: ApplicationSource.FORM_FILL,
+          },
+          select: { id: true, status: true },
+        });
+
+        return {
+          applicationId: application.id,
+          candidateId: candidate.id,
+          resumeId: resume.id,
+          resumeUrl,
+          status: application.status,
+        };
+      });
+    } catch (error) {
+      // The transaction rolled back the DB rows, but the file we already
+      // uploaded to Supabase before entering the transaction is still
+      // sitting in storage. Clean it up so it doesn't leak.
+      await this.resumeService.deleteStorageFile(resumeUrl).catch(() => {
+        // best-effort; don't mask the original error
+      });
+      throw error;
     }
-
-    const application = await this.db.application.create({
-      data: {
-        candidateId: candidate.id,
-        jobId: dto.jobId,
-        companyId: dto.companyId,
-        resumeId: resume.id,
-        status: ApplicationStatus.APPLIED,
-        screeningStage: ScreeningStage.NOT_STARTED,
-        source: ApplicationSource.FORM_FILL,
-      },
-      select: {
-        id: true,
-        status: true,
-      },
-    });
-
-    return {
-      applicationId: application.id,
-      candidateId: candidate.id,
-      resumeId: resume.id,
-      status: application.status,
-    };
   }
 }
