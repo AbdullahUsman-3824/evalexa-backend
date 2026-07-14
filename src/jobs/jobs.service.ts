@@ -80,6 +80,18 @@ const jobSelect = {
   },
 } satisfies Prisma.JobSelect;
 
+const jobListSelect = {
+  id: true,
+  title: true,
+  applicationDeadline: true,
+  status: true,
+  _count: {
+    select: {
+      applications: true,
+    },
+  },
+} satisfies Prisma.JobSelect;
+
 const publicCompanySelect = {
   id: true,
   name: true,
@@ -631,11 +643,16 @@ export class JobsService {
         ? [{ applicationDeadline: 'asc' }, { createdAt: 'desc' }]
         : [{ createdAt: 'desc' }];
 
-    return this.db.job.findMany({
+    const jobs = await this.db.job.findMany({
       where,
       orderBy,
-      select: jobSelect,
+      select: jobListSelect,
     });
+
+    return jobs.map(({ _count, ...job }) => ({
+      ...job,
+      applications: _count.applications,
+    }));
   }
 
   async findOne(

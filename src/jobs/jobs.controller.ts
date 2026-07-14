@@ -28,6 +28,11 @@ export class JobsController {
   }
 
   @Get()
+  findAfindll(@User() user: JwtPayload, @Query() query: FindJobsQueryDto) {
+    return this.jobsService.findAll(user.sub, user.companyId, query);
+  }
+
+  @Get('detailed')
   findAll(@User() user: JwtPayload, @Query() query: FindJobsQueryDto) {
     return this.jobsService.findAll(user.sub, user.companyId, query);
   }
