@@ -76,6 +76,11 @@ export class CompanyController {
     return this.companyService.getVerificationDocumentSignedUrls(user.sub, id);
   }
 
+  @Get(':id/stats')
+  getStats(@User() user: JwtPayload, @Param('id') id: string) {
+    return this.companyService.getCompanyStats(user.sub, id);
+  }
+
   @Patch(':id')
   @UseInterceptors(companyFileFields)
   update(

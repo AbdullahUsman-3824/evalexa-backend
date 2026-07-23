@@ -685,4 +685,50 @@ export class CompanyService {
 
     return company;
   }
+
+  // ---------- stats ----------
+
+  async getCompanyStats(userId: string, companyId: string) {
+    // Reuse your existing ownership check pattern
+    const company = await this.db.company.findFirst({
+      where: { id: companyId, createdBy: userId },
+      select: { id: true },
+    });
+
+    if (!company) {
+      throw new NotFoundException('Company not found');
+    }
+
+    // ---- REAL data: derived from the Job table ----
+    const [activeJobs, totalJobsPosted] = await Promise.all([
+      this.db.job.count({
+        where: {
+          companyId,
+          status: JobStatus.OPEN,
+          applicationDeadline: { gte: new Date() },
+        },
+      }),
+      this.db.job.count({
+        where: { companyId },
+      }),
+    ]);
+
+    // ---- DUMMY data: hardcoded until Application/Interview/Hire models exist ----
+    // Swap these out once you have the relevant tables to query from.
+    const dummyStats = {
+      totalApplicants: 4258,
+      totalShortlisted: 486,
+      totalInterviews: 221,
+      totalHires: 137,
+      avgResponseTimeHours: 14,
+      avgTimeToHireDays: 8.4,
+      candidateRating: 4.7,
+    };
+
+    return {
+      activeJobs,
+      totalJobsPosted,
+      ...dummyStats,
+    };
+  }
 }
