@@ -1,0 +1,31 @@
+model Offer {
+  id            String      @id @default(uuid()) @db.Uuid
+
+  applicationId String      @unique @map("application_id") @db.Uuid
+
+  status        OfferStatus @default(DRAFT)
+
+  // Offer details
+  jobTitle      String      @map("job_title") @db.VarChar(255)
+  salary        Float?
+  currency      String      @default("PKR") @db.VarChar(10)
+  salaryPeriod  SalaryPeriod?
+
+  startDate     DateTime?   @map("start_date") @db.Date
+
+  expiresAt     DateTime?   @map("expires_at") @db.Timestamptz(6)
+
+  notes         String?     @db.Text
+
+  sentAt        DateTime?   @map("sent_at") @db.Timestamptz(6)
+  acceptedAt    DateTime?   @map("accepted_at") @db.Timestamptz(6)
+  declinedAt    DateTime?   @map("declined_at") @db.Timestamptz(6)
+
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("offer")
+}

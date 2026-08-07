@@ -7,6 +7,7 @@ import { ResumeModule } from '../resume/resume.module';
 import { UsersModule } from '../users/users.module';
 import { ApplicationController } from './application.controller';
 import { ApplicationService } from './application.service';
+import { RankingModule } from '../ranking/ranking.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { ApplicationService } from './application.service';
     ResumeModule,
     UsersModule,
     AuthModule,
+    RankingModule,
   ],
   controllers: [ApplicationController],
   providers: [ApplicationService, RecruiterRoleGuard],

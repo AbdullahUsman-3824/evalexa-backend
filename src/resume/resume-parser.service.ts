@@ -116,6 +116,7 @@ export class ResumeParserService {
 
       return parsed;
     } catch (error) {
+      console.log('Error parsing resume:', error);
       if (error instanceof BadRequestException) {
         throw error;
       }

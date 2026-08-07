@@ -6,43 +6,25 @@ model Application {
   resumeId          String            @map("resume_id") @db.Uuid
   source            ApplicationSource @default(FORM_FILL)
   status            ApplicationStatus @default(APPLIED)
-  screeningStage    ScreeningStage    @default(NOT_STARTED) @map("screening_stage")
   matchScore        Int?              @map("match_score")
   rankPosition      Int?              @map("rank_position")
   isAutoShortlisted Boolean           @default(false) @map("is_auto_shortlisted")
   appliedAt         DateTime          @default(now()) @map("applied_at") @db.Timestamptz(6)
   updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  candidate         Candidate         @relation(fields: [candidateId], references: [id])
-  company           Company           @relation(fields: [companyId], references: [id])
-  job               Job               @relation(fields: [jobId], references: [id])
-  resume            Resume            @relation(fields: [resumeId], references: [id])
-  resumeAnalyses    ResumeAnalysis[]
+  candidate             Candidate              @relation(fields: [candidateId], references: [id])
+  company               Company                @relation(fields: [companyId], references: [id])
+  job                   Job                    @relation(fields: [jobId], references: [id])
+  resume                Resume                 @relation(fields: [resumeId], references: [id])
+  resumeAnalyses        ResumeAnalysis[]
+  applicationProcessing ApplicationProcessing?
+  interviews            Interview[]
+  offers                Offer[]
 
   @@index([candidateId])
   @@index([jobId])
   @@index([companyId])
   @@index([resumeId])
+  @@index([jobId, rankPosition])
+  @@index([jobId, matchScore])
   @@map("application")
-}
-
-enum ApplicationSource {
-  FORM_FILL   @map("formFill")
-  RESUME      @map("resume")
-  BULK_UPLOAD @map("bulk_upload")
-}
-
-enum ApplicationStatus {
-  APPLIED     @map("applied")
-  SCREENING   @map("screening")
-  SHORTLISTED @map("shortlisted")
-  INTERVIEW   @map("interview")
-  OFFER       @map("offer")
-  REJECTED    @map("rejected")
-  HIRED       @map("hired")
-}
-
-enum ScreeningStage {
-  NOT_STARTED @map("not_started")
-  IN_PROGRESS @map("in_progress")
-  COMPLETED   @map("completed")
 }

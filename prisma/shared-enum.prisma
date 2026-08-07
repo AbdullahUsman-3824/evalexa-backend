@@ -1,0 +1,125 @@
+// ================================
+// JOB
+// ================================
+
+enum JobStatus {
+    DRAFT
+    OPEN
+    CLOSED
+    ARCHIVED
+}
+
+enum JobType {
+    FULL_TIME
+    PART_TIME
+    CONTRACT
+    INTERN
+    FREELANCE
+}
+
+enum WorkModel {
+    ONSITE
+    REMOTE
+    HYBRID
+}
+
+enum ExperienceLevel {
+    INTERN
+    JUNIOR
+    MID
+    SENIOR
+    LEAD
+}
+
+enum EducationLevel {
+    HIGH_SCHOOL
+    DIPLOMA
+    ASSOCIATE
+    BACHELOR
+    MASTER
+    PHD
+    ANY
+}
+
+enum SalaryPeriod {
+    HOURLY
+    MONTHLY
+    YEARLY
+}
+
+enum SkillImportance {
+    REQUIRED
+    PREFERRED
+}
+
+// ================================
+// APPLICATION
+// ================================
+
+enum ApplicationSource {
+    FORM_FILL
+    RESUME_UPLOAD
+    REFERRAL
+    IMPORT
+    API
+}
+
+enum ApplicationStatus {
+    APPLIED
+    SHORTLISTED
+    INTERVIEW
+    OFFER
+    HIRED
+    REJECTED
+    WITHDRAWN
+}
+
+// ================================
+// PROCESSING
+// ================================
+
+enum ProcessingStatus {
+    PENDING
+    RUNNING
+    COMPLETED
+    FAILED
+    CANCELLED
+    SKIPPED
+}
+
+enum ProcessingTaskType {
+    RESUME_PARSE
+    RESUME_ANALYSIS
+    RANKING
+    SHORTLISTING
+    AI_INTERVIEW
+    EMAIL_NOTIFICATION
+}
+
+// ================================
+// INTERVIEW
+// ================================
+
+enum InterviewStatus {
+    PENDING
+    IN_PROGRESS
+    COMPLETED
+    CANCELLED
+}
+
+enum InterviewType {
+    AI
+    LIVE
+}
+
+// ================================
+// OFFER
+// ================================
+
+enum OfferStatus {
+    DRAFT
+    SENT
+    ACCEPTED
+    DECLINED
+    EXPIRED
+}

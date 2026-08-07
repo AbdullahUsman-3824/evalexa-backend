@@ -15,6 +15,7 @@ import { ScreeningModule } from './screening/screening.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { SkillsModule } from './skills/skills.module';
+import { RankingModule } from './ranking/ranking.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { SkillsModule } from './skills/skills.module';
     PublicModule,
     ScreeningModule,
     SkillsModule,
+    RankingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

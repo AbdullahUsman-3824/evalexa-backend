@@ -1,35 +1,58 @@
 model Job {
-  id                  String           @id @default(uuid()) @db.Uuid
-  companyId           String           @db.Uuid
-  createdBy           String           @db.Uuid
-  title               String           @db.VarChar(255)
-  description         String
-  jobType             JobType
-  experienceLevel     ExperienceLevel
-  salaryMin           Int
-  salaryMax           Int
-  location            String           @db.VarChar(255)
-  workModel           WorkModel
-  status              JobStatus        @default(DRAFT)
-  applicationDeadline DateTime         @db.Date
-  createdAt           DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt           DateTime         @updatedAt @db.Timestamptz(6)
-  slug                String           @unique @db.VarChar(350)
-  educationLevel      EducationLevel   @default(ANY)
-  responsibilities    String
-  salaryCurrency      String           @default("PKR")
-  salaryPeriod        SalaryPeriod
-  department          String           @db.VarChar(255)
-  applications        Application[]
-  aiConfig            JobAiConfig?
-  jobSkills           JobSkill[]
-  company             Company          @relation(fields: [companyId], references: [id])
-  creator             User             @relation("UserCreatedJobs", fields: [createdBy], references: [id])
-  resumeAnalyses      ResumeAnalysis[]
+  id String @id @default(uuid()) @db.Uuid
+
+  companyId String @db.Uuid
+  createdBy String @db.Uuid
+
+  // Basic Information
+  title       String @db.VarChar(255)
+  slug        String @unique @db.VarChar(350)
+  description String
+
+  department String? @db.VarChar(150)
+
+  // Employment
+  jobType   JobType
+  workModel WorkModel
+
+  experienceLevel ExperienceLevel
+  educationLevel  EducationLevel  @default(ANY)
+
+  // Salary
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String        @default("PKR") @db.VarChar(10)
+  salaryPeriod   SalaryPeriod?
+
+  // Location
+  location String? @db.VarChar(255)
+
+  // Hiring
+  status JobStatus @default(DRAFT)
+
+  applicationDeadline DateTime? @db.Date
+
+  totalOpenings Int @default(1)
+
+  // Audit
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  // Relations
+  company Company @relation(fields: [companyId], references: [id])
+
+  creator User @relation("UserCreatedJobs", fields: [createdBy], references: [id])
+
+  applications   Application[]
+  aiConfig       JobAiConfig?
+  resumeAnalyses ResumeAnalysis[]
+
+  jobSkills JobSkill[]
 
   @@index([companyId])
   @@index([createdBy])
   @@index([status])
+  @@index([applicationDeadline])
   @@map("jobs")
 }
 
@@ -55,58 +78,32 @@ model JobSkill {
 }
 
 model JobAiConfig {
-  id                      String   @id @default(uuid()) @db.Uuid
-  jobId                   String   @unique @db.Uuid
-  enableAutoShortlist     Boolean
-  enableAiInterview       Boolean
-  createdAt               DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt               DateTime @updatedAt @db.Timestamptz(6)
-  interviewSelectionCount Int
-  resumeSelectionCount    Int
-  job                     Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  id                      String    @id @default(uuid()) @db.Uuid
+
+  jobId                   String    @unique @db.Uuid
+
+  // Resume Ranking
+  enableRanking           Boolean   @default(true)
+
+  // Automatically shortlist top candidates
+  enableAutoShortlisting  Boolean   @default(true)
+
+  // Number of candidates to shortlist
+  shortlistLimit          Int?
+
+  // Minimum AI score required
+  minimumMatchScore       Float?
+
+  // AI Interview
+  enableAiInterview       Boolean   @default(false)
+
+  // Invite only top N candidates
+  interviewLimit          Int?
+
+  createdAt               DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime  @updatedAt @db.Timestamptz(6)
+
+  job                     Job       @relation( fields: [jobId],references: [id],onDelete: Cascade)
 
   @@map("job_ai_config")
-}
-
-enum JobType {
-  FULL_TIME @map("full-time")
-  PART_TIME @map("part-time")
-  CONTRACT  @map("contract")
-}
-
-enum ExperienceLevel {
-  JUNIOR @map("junior")
-  MID    @map("mid")
-  SENIOR @map("senior")
-  LEAD   @map("lead")
-}
-
-enum EducationLevel {
-  HIGH_SCHOOL @map("high_school")
-  BACHELOR    @map("bachelor")
-  MASTER      @map("master")
-  PHD         @map("phd")
-  ANY         @map("any")
-}
-
-enum WorkModel {
-  REMOTE @map("remote")
-  HYBRID @map("hybrid")
-  ONSITE @map("onsite")
-}
-
-enum SalaryPeriod {
-  MONTHLY @map("monthly")
-  YEARLY  @map("yearly")
-}
-
-enum JobStatus {
-  OPEN   @map("open")
-  CLOSED @map("closed")
-  DRAFT  @map("draft")
-}
-
-enum SkillImportance {
-  REQUIRED  @map("required")
-  PREFERRED @map("preferred")
 }

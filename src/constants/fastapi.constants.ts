@@ -9,4 +9,7 @@ export const FASTAPI_ENDPOINTS = {
     PARSE: `${FASTAPI_BASE_URL}/resume/parse`,
     HEALTH: '/health',
   },
+  RANKING: {
+    RANK: `${FASTAPI_BASE_URL}/rank`,
+  },
 } as const;

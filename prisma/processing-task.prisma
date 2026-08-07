@@ -1,0 +1,31 @@
+model ProcessingTask {
+  id                String              @id @default(uuid()) @db.Uuid
+
+  processingId      String              @map("processing_id") @db.Uuid
+
+  type              ProcessingTaskType
+
+  status            ProcessingStatus    @default(PENDING)
+
+  attemptCount      Int                 @default(0) @map("attempt_count")
+
+  error             Json?
+
+  startedAt         DateTime?           @map("started_at") @db.Timestamptz(6)
+
+  completedAt       DateTime?           @map("completed_at") @db.Timestamptz(6)
+
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  processing        ApplicationProcessing @relation(fields: [processingId], references: [id], onDelete: Cascade)
+
+  @@index([processingId])
+
+  @@index([type])
+
+  @@index([status])
+
+  @@map("processing_tasks")
+}

@@ -1,0 +1,29 @@
+model Interview {
+    id String @id @default(uuid()) @db.Uuid
+
+    applicationId String @map("application_id") @db.Uuid
+
+    type InterviewType
+
+    status InterviewStatus @default(PENDING)
+
+    overallScore Float? @map("overall_score")
+
+    recommendation String?
+
+    feedback String?
+
+    startedAt DateTime? @map("started_at") @db.Timestamptz(6)
+
+    completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+
+    createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+    updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+    application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+    @@index([applicationId])
+    @@index([status])
+    @@map("interviews")
+}

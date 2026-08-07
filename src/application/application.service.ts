@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -16,6 +17,7 @@ import { DatabaseService } from '../database/database.service';
 import { ResumeService } from '../resume/resume.service';
 import { UploadedResumeFileDto } from '../resume/dto/uploaded-resume-file.dto';
 import { ApplyWithParsedDto } from './dto/apply-with-parsed.dto';
+import { RankingService } from '../ranking/ranking.service';
 
 const jobApplicationsSelect = {
   id: true,
@@ -49,10 +51,13 @@ const jobApplicationsSelect = {
 
 @Injectable()
 export class ApplicationService {
+  private readonly logger = new Logger(ApplicationService.name);
+
   constructor(
     private readonly candidateService: CandidateService,
     private readonly resumeService: ResumeService,
     private readonly db: DatabaseService,
+    private readonly rankingService: RankingService,
   ) {}
 
   private normalizeText(value?: string | null): string | undefined {
@@ -172,16 +177,25 @@ export class ApplicationService {
     return applications;
   }
 
-  async applyWithParsedData(dto: ApplyWithParsedDto, file: UploadedResumeFileDto) {
+  async applyWithParsedData(
+    dto: ApplyWithParsedDto,
+    file: UploadedResumeFileDto,
+  ) {
     await this.ensureJobAndCompanyExist(dto.jobId, dto.companyId);
 
-    // External calls (FastAPI parse + Supabase upload) happen BEFORE the
-    // transaction opens, since Prisma can't roll either of them back.
     const { parsed, resumeUrl } =
       await this.resumeService.prepareForFinalization(file);
 
+    let result: {
+      applicationId: string;
+      candidateId: string;
+      resumeId: string;
+      resumeUrl: string;
+      status: ApplicationStatus;
+    };
+
     try {
-      return await this.db.$transaction(async (tx) => {
+      result = await this.db.$transaction(async (tx) => {
         const fullName = this.buildFullName(
           dto.personal.firstName,
           dto.personal.lastName,
@@ -258,13 +272,22 @@ export class ApplicationService {
         };
       });
     } catch (error) {
-      // The transaction rolled back the DB rows, but the file we already
-      // uploaded to Supabase before entering the transaction is still
-      // sitting in storage. Clean it up so it doesn't leak.
       await this.resumeService.deleteStorageFile(resumeUrl).catch(() => {
         // best-effort; don't mask the original error
       });
       throw error;
     }
+    
+    this.rankingService
+      .scoreAndRankApplication(result.applicationId)
+      .catch((error) => {
+        this.logger.error(
+          `Background ranking failed for application ${result.applicationId}: ${
+            error instanceof Error ? error.message : error
+          }`,
+        );
+      });
+
+    return result;
   }
 }
