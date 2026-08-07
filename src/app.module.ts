@@ -1,21 +1,21 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigModule } from '@nestjs/config';
-import { ApplicationModule } from './application/application.module';
+import { ApplicationModule } from './modules/application/application.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { CompanyModule } from './company/company.module';
-import { CandidateModule } from './candidate/candidate.module';
+import { CompanyModule } from './modules/company/company.module';
+import { CandidateModule } from './modules/candidate/candidate.module';
 import { DatabaseModule } from './database/database.module';
-import { JobsModule } from './jobs/jobs.module';
-import { FASTAPI_BASE_URL } from './constants/fastapi.constants';
-import { PublicModule } from './public/public.module';
-import { ResumeModule } from './resume/resume.module';
-import { ScreeningModule } from './screening/screening.module';
-import { UsersModule } from './users/users.module';
-import { AuthModule } from './auth/auth.module';
-import { SkillsModule } from './skills/skills.module';
-import { RankingModule } from './ranking/ranking.module';
+import { JobsModule } from './modules/jobs/jobs.module';
+import { FASTAPI_BASE_URL } from './common/constants/fastapi.constants';
+import { PublicModule } from './modules/public/public.module';
+import { ResumeModule } from './modules/resume/resume.module';
+import { ScreeningModule } from './modules/screening/screening.module';
+import { UsersModule } from './modules/users/users.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { SkillsModule } from './modules/skills/skills.module';
+import { RankingModule } from './modules/ranking/ranking.module';
 
 @Module({
   imports: [
