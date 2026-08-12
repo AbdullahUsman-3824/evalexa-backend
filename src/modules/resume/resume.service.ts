@@ -10,12 +10,47 @@ import {
   AutofillEducationDto,
   AutofillExperienceDto,
   AutofillPersonalDto,
+  AutofillSkillDto,
   ResumeParsePreviewDto,
 } from './dto/resume-upload-response.dto';
 import { UploadedResumeFileDto } from './dto/uploaded-resume-file.dto';
 import { ResumeParserService, ParsedResumeData } from './resume-parser.service';
 
 type Db = DatabaseService | Prisma.TransactionClient;
+
+/**
+ * Shape of the data the applicant actually submits at apply time
+ * (ApplyWithParsedDto). Mirrors the AutofillXDto fields the user could
+ * have edited in the form, plus skills — this is what gets persisted,
+ * NOT the raw FastAPI parser output.
+ */
+export interface SubmittedResumeData {
+  personal: {
+    firstName: string;
+    lastName: string;
+    email?: string;
+    phone?: string;
+    headline?: string;
+    address?: string;
+  };
+  education: Array<{
+    school: string;
+    fieldOfStudy?: string;
+    degree?: string;
+    startDate?: string;
+    endDate?: string;
+  }>;
+  experience: Array<{
+    title: string;
+    company?: string;
+    industry?: string;
+    summary?: string;
+    startDate?: string;
+    endDate?: string;
+    isCurrent?: boolean;
+  }>;
+  skills: AutofillSkillDto[];
+}
 
 @Injectable()
 export class ResumeService {
@@ -27,7 +62,6 @@ export class ResumeService {
 
   /**
    * Parse-only, no persistence. Used by POST /resume/parse for the public
-   * form's autofill preview.
    */
   async parseResumePreview(
     file: UploadedResumeFileDto,
@@ -45,56 +79,41 @@ export class ResumeService {
   }
 
   /**
-   * Step 1 of finalization — everything that is NOT rollback-safe under a
-   * Prisma transaction (parsing hits the FastAPI service, upload hits
-   * Supabase storage). Call this BEFORE opening a db.$transaction.
+   * Uploads the file to Supabase AND creates the resume row, in one call
    */
-  async prepareForFinalization(
-    file: UploadedResumeFileDto,
-  ): Promise<{ parsed: ParsedResumeData; resumeUrl: string }> {
-    const parsed = await this.resumeParser.parseResume(
-      file.buffer,
-      file.originalname,
-    );
-
-    if (!parsed) {
-      throw new BadRequestException('Parser returned empty result');
-    }
-
-    const resumeUrl = await this.uploadToSupabase(file);
-
-    return { parsed, resumeUrl };
-  }
-
-  /**
-   * Step 2 of finalization — the actual DB row. Pass a transaction client
-   * so this participates in the caller's atomic candidate+resume+
-   * application write.
-   */
-  async saveResumeRecord(
+  async attachResumeToCandidate(
     params: {
+      file: UploadedResumeFileDto;
       candidateId: string;
-      resumeUrl: string;
-      fileName: string;
-      parsed: ParsedResumeData;
+      submitted: SubmittedResumeData;
     },
     db: Db = this.db,
   ) {
-    const { candidateId, resumeUrl, fileName, parsed } = params;
+    const { file, candidateId, submitted } = params;
 
-    const extractedSkills = this.extractSkills(parsed.skills);
-    const extractedExperience =
-      typeof parsed.meta?.totalExperienceMonths === 'number'
-        ? parsed.meta.totalExperienceMonths
-        : null;
-    const extractedEducation = parsed.education?.[0]?.degree ?? null;
+    const resumeUrl = await this.uploadToSupabase(file);
+
+    // extractedSkills stays as a flat string[] — it's metadata used for
+    // display/search only, not the ranking payload (that's parsedData.skills,
+    // which keeps the {name, category} shape end-to-end).
+    const extractedSkills = Array.from(
+      new Map(
+        (submitted.skills ?? [])
+          .map((skill) => this.normalizeText(skill.name))
+          .filter((name): name is string => Boolean(name))
+          .map((name) => [name.toLowerCase(), name] as const),
+      ).values(),
+    );
+    const extractedExperience = this.sumExperienceMonths(submitted.experience);
+    const extractedEducation =
+      this.normalizeText(submitted.education?.[0]?.degree) ?? null;
 
     return db.resume.create({
       data: {
         candidateId,
         resumeUrl,
-        fileName,
-        parsedData: parsed as unknown as object,
+        fileName: file.originalname,
+        parsedData: submitted as unknown as object,
         extractedSkills: extractedSkills as unknown as object,
         extractedExperience,
         extractedEducation,
@@ -228,6 +247,7 @@ export class ResumeService {
       personal,
       education: this.mapEducation(parsed.education),
       experience: this.mapExperience(parsed.experience),
+      skills: this.extractSkills(parsed.skills),
     };
   }
 
@@ -291,16 +311,66 @@ export class ResumeService {
     }));
   }
 
-  private extractSkills(skills: ParsedResumeData['skills']): string[] {
+  private extractSkills(
+    skills: ParsedResumeData['skills'],
+  ): AutofillSkillDto[] {
     if (!Array.isArray(skills)) return [];
 
-    return Array.from(
-      new Set(
-        skills
-          .map((skill) => this.normalizeText(skill.name))
-          .filter((skill): skill is string => Boolean(skill)),
-      ),
-    );
+    const seen = new Set<string>();
+    const result: AutofillSkillDto[] = [];
+
+    for (const skill of skills) {
+      const name = this.normalizeText(skill.name);
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      result.push({
+        name,
+        category: this.normalizeText(skill.category) ?? undefined,
+      });
+    }
+
+    return result;
+  }
+
+  private sumExperienceMonths(
+    experience: SubmittedResumeData['experience'],
+  ): number | null {
+    if (!Array.isArray(experience) || experience.length === 0) return null;
+
+    let totalMonths = 0;
+    let countedAny = false;
+
+    for (const entry of experience) {
+      const start = this.parseMonthYear(entry.startDate);
+      if (!start) continue;
+
+      const end = entry.isCurrent
+        ? { year: new Date().getFullYear(), month: new Date().getMonth() + 1 }
+        : this.parseMonthYear(entry.endDate);
+      if (!end) continue;
+
+      const months = (end.year - start.year) * 12 + (end.month - start.month);
+      if (months > 0) {
+        totalMonths += months;
+        countedAny = true;
+      }
+    }
+
+    return countedAny ? totalMonths : null;
+  }
+
+  private parseMonthYear(
+    value: string | null | undefined,
+  ): { year: number; month: number } | null {
+    if (!value) return null;
+    const match = value.trim().match(/^(\d{1,2})\/(\d{4})$/);
+    if (!match) return null;
+
+    const month = Number(match[1]);
+    const year = Number(match[2]);
+    if (month < 1 || month > 12) return null;
+
+    return { year, month };
   }
 
   private normalizeText(value: string | null | undefined): string | null {

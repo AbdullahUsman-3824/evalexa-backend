@@ -4,6 +4,8 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  HttpException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { ApplicationSource, ApplicationStatus } from '@prisma/client';
 import { jobApplicationsSelect } from './application.select';
@@ -14,6 +16,7 @@ import { ResumeService } from '../resume/resume.service';
 import { UploadedResumeFileDto } from '../resume/dto/uploaded-resume-file.dto';
 import { ApplyWithParsedDto } from './dto/apply-with-parsed.dto';
 import { RankingService } from '../ranking/ranking.service';
+import { ApplicationProcessingProducer } from '../processing/producers/application-processing.producer';
 
 @Injectable()
 export class ApplicationService {
@@ -24,6 +27,7 @@ export class ApplicationService {
     private readonly resumeService: ResumeService,
     private readonly db: DatabaseService,
     private readonly rankingService: RankingService,
+    private readonly applicationProcessingProducer: ApplicationProcessingProducer,
   ) {}
 
   private normalizeText(value?: string | null): string | undefined {
@@ -45,54 +49,6 @@ export class ApplicationService {
     return Object.fromEntries(
       Object.entries(data).filter(([, value]) => value !== undefined),
     ) as Partial<T>;
-  }
-
-  private mapEducationToResumeField(
-    education: ApplyWithParsedDto['education'],
-  ): string | null {
-    const first = education[0];
-    if (!first) return null;
-
-    const parts = [
-      this.normalizeText(first.degree),
-      this.normalizeText(first.fieldOfStudy),
-      this.normalizeText(first.school),
-    ].filter((value): value is string => Boolean(value));
-
-    return parts.length > 0 ? parts.join(', ') : null;
-  }
-
-  private parseDate(dateText?: string): Date | null {
-    const normalized = this.normalizeText(dateText);
-    if (!normalized) return null;
-
-    const parsedDate = new Date(normalized);
-    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
-  }
-
-  private calculateExperienceMonths(
-    experience: ApplyWithParsedDto['experience'],
-  ): number | null {
-    if (!Array.isArray(experience) || experience.length === 0) return null;
-
-    const now = new Date();
-    let totalMonths = 0;
-
-    for (const item of experience) {
-      const start = this.parseDate(item.startDate);
-      if (!start) continue;
-
-      const end = item.isCurrent ? now : (this.parseDate(item.endDate) ?? now);
-      if (end < start) continue;
-
-      const months =
-        (end.getFullYear() - start.getFullYear()) * 12 +
-        (end.getMonth() - start.getMonth());
-
-      totalMonths += Math.max(months, 0);
-    }
-
-    return totalMonths > 0 ? totalMonths : null;
   }
 
   private async ensureJobAndCompanyExist(jobId: string, companyId: string) {
@@ -149,9 +105,7 @@ export class ApplicationService {
   ) {
     await this.ensureJobAndCompanyExist(dto.jobId, dto.companyId);
 
-    const { parsed, resumeUrl } =
-      await this.resumeService.prepareForFinalization(file);
-
+    let resumeUrl: string | undefined;
     let result: {
       applicationId: string;
       candidateId: string;
@@ -162,38 +116,22 @@ export class ApplicationService {
 
     try {
       result = await this.db.$transaction(async (tx) => {
+        const personal = dto.personal;
         const fullName = this.buildFullName(
-          dto.personal.firstName,
-          dto.personal.lastName,
+          personal.firstName,
+          personal.lastName,
         );
-        const email = this.normalizeEmail(dto.personal.email);
+        const email = this.normalizeEmail(personal.email);
 
-        const candidatePatch = this.safeUpdate({
-          fullName: fullName || 'Unknown',
-          email,
-          phone: this.normalizeText(dto.personal.phone),
-          location: this.normalizeText(dto.personal.address),
-        });
-
-        const existingByEmail = email
-          ? await this.candidateService.findByEmail(email, tx)
-          : null;
-
-        const candidate = existingByEmail
-          ? await this.candidateService.updateCandidate(
-              existingByEmail.id,
-              candidatePatch,
-              tx,
-            )
-          : await this.candidateService.createCandidate(
-              candidatePatch as {
-                fullName: string;
-                email?: string;
-                phone?: string;
-                location?: string;
-              },
-              tx,
-            );
+        const candidate = await this.candidateService.upsertByEmail(
+          {
+            fullName: fullName || 'Unknown',
+            email,
+            phone: this.normalizeText(personal.phone),
+            location: this.normalizeText(personal.address),
+          },
+          tx,
+        );
 
         const existingApplication = await tx.application.findFirst({
           where: { candidateId: candidate.id, jobId: dto.jobId },
@@ -206,15 +144,21 @@ export class ApplicationService {
           );
         }
 
-        const resume = await this.resumeService.saveResumeRecord(
+        // Single call — resume service handles upload + DB row internally.
+        const resume = await this.resumeService.attachResumeToCandidate(
           {
+            file,
             candidateId: candidate.id,
-            resumeUrl,
-            fileName: file.originalname,
-            parsed,
+            submitted: {
+              personal,
+              education: dto.education,
+              experience: dto.experience,
+              skills: dto.skills,
+            },
           },
           tx,
         );
+        resumeUrl = resume.resumeUrl;
 
         const application = await tx.application.create({
           data: {
@@ -232,22 +176,48 @@ export class ApplicationService {
           applicationId: application.id,
           candidateId: candidate.id,
           resumeId: resume.id,
-          resumeUrl,
+          resumeUrl: resume.resumeUrl,
           status: application.status,
         };
       });
     } catch (error) {
-      await this.resumeService.deleteStorageFile(resumeUrl).catch(() => {
-        // best-effort; don't mask the original error
-      });
-      throw error;
+      console.error('Error during application submission:', error);
+
+      // Cleanup
+      if (resumeUrl) {
+        await this.resumeService.deleteStorageFile(resumeUrl).catch(() => {
+          // best-effort
+        });
+      }
+
+      // Agar already HttpException hai to as-is rethrow karo
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      // Baaki unknown errors ko proper message ke saath BadRequest/InternalServerError banao
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Something went wrong while submitting application';
+
+      throw new InternalServerErrorException(message);
     }
 
-    this.rankingService
-      .scoreAndRankApplication(result.applicationId)
+    // this.rankingService
+    //   .scoreAndRankApplication(result.applicationId)
+    //   .catch((error) => {
+    //     this.logger.error(
+    //       `Background ranking failed for application ${result.applicationId}: ${
+    //         error instanceof Error ? error.message : error
+    //       }`,
+    //     );
+    //   });
+    this.applicationProcessingProducer
+      .enqueueApplicationProcessing(result.applicationId, dto.jobId)
       .catch((error) => {
         this.logger.error(
-          `Background ranking failed for application ${result.applicationId}: ${
+          `Failed to enqueue processing for application ${result.applicationId}: ${
             error instanceof Error ? error.message : error
           }`,
         );

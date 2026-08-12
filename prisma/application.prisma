@@ -23,7 +23,7 @@ model Application {
   job       Job       @relation(fields: [jobId], references: [id])
   resume    Resume    @relation(fields: [resumeId], references: [id])
 
-  processing ApplicationProcessing?
+  processingTasks ProcessingTask[]
 
   analyses ResumeAnalysis[]
 

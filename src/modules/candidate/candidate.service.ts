@@ -3,16 +3,18 @@ import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../../database/database.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
+import { normalizeEmail } from '../../common/helpers/normalizer';
+import {
+  candidatePublicSelect,
+  candidateProfileSelect,
+  candidateRecruiterSelect,
+} from './candidate.select';
 
 type Db = DatabaseService | Prisma.TransactionClient;
 
 @Injectable()
 export class CandidateService {
   constructor(private readonly db: DatabaseService) {}
-
-  private normalizeEmail(email: string): string {
-    return email.trim().toLowerCase();
-  }
 
   private hasPrismaErrorCode(error: unknown, code: string): boolean {
     return (
@@ -23,76 +25,49 @@ export class CandidateService {
     );
   }
 
-  private readonly candidatePublicSelect = {
-    id: true,
-    fullName: true,
-    email: true,
-    phone: true,
-    linkedinUrl: true,
-    portfolioUrl: true,
-    location: true,
-    createdAt: true,
-    updatedAt: true,
-  } satisfies Prisma.CandidateSelect;
-
-  private readonly candidateProfileSelect = {
-    ...this.candidatePublicSelect,
-    _count: {
-      select: {
-        resumes: true,
-        applications: true,
-      },
+  /**
+   * Find by email → update if exists, otherwise create.
+   * All candidate upsert logic lives here.
+   */
+  async upsertByEmail(
+    data: {
+      fullName: string;
+      email?: string | null;
+      phone?: string | null;
+      location?: string | null;
     },
-  } satisfies Prisma.CandidateSelect;
+    db: Db = this.db,
+  ) {
+    const email = data.email ? normalizeEmail(data.email) : undefined;
 
-  private readonly candidateRecruiterSelect = {
-    ...this.candidateProfileSelect,
-    resumes: {
-      select: {
-        id: true,
-        resumeUrl: true,
-        fileName: true,
-        description: true,
-        parsedData: true,
-        extractedSkills: true,
-        extractedExperience: true,
-        extractedEducation: true,
-        isPrimary: true,
-        uploadedAt: true,
-      },
-      orderBy: {
-        uploadedAt: 'desc',
-      },
-    },
-    applications: {
-      select: {
-        id: true,
-        jobId: true,
-        companyId: true,
-        resumeId: true,
-        source: true,
-        status: true,
-        matchScore: true,
-        rankPosition: true,
-        isAutoShortlisted: true,
-        appliedAt: true,
-        updatedAt: true,
-        job: {
-          select: {
-            id: true,
-            title: true,
-            slug: true,
-          },
+    const existing = await this.findByEmail(email, db);
+
+    if (existing) {
+      return this.updateCandidate(
+        existing.id,
+        {
+          fullName: data.fullName,
+          email,
+          phone: data.phone ?? undefined,
+          location: data.location ?? undefined,
         },
+        db,
+      );
+    }
+
+    return this.createCandidate(
+      {
+        fullName: data.fullName,
+        email,
+        phone: data.phone ?? undefined,
+        location: data.location ?? undefined,
       },
-      orderBy: {
-        appliedAt: 'desc',
-      },
-    },
-  } satisfies Prisma.CandidateSelect;
+      db,
+    );
+  }
 
   async createCandidate(dto: CreateCandidateDto, db: Db = this.db) {
-    const email = dto.email ? this.normalizeEmail(dto.email) : undefined;
+    const email = dto.email ? normalizeEmail(dto.email) : undefined;
     const existingCandidate = await this.findByEmail(email, db);
 
     if (existingCandidate) {
@@ -104,7 +79,7 @@ export class CandidateService {
         ...dto,
         ...(email ? { email } : {}),
       },
-      select: this.candidatePublicSelect,
+      select: candidatePublicSelect,
     });
   }
 
@@ -114,22 +89,22 @@ export class CandidateService {
     }
 
     return db.candidate.findFirst({
-      where: { email: this.normalizeEmail(email) },
-      select: this.candidatePublicSelect,
+      where: { email: normalizeEmail(email) },
+      select: candidatePublicSelect,
     });
   }
 
   findById(id: string, db: Db = this.db) {
     return db.candidate.findUnique({
       where: { id },
-      select: this.candidatePublicSelect,
+      select: candidatePublicSelect,
     });
   }
 
   async getCandidateProfile(id: string) {
     const candidate = await this.db.candidate.findUnique({
       where: { id },
-      select: this.candidateProfileSelect,
+      select: candidateProfileSelect,
     });
 
     if (!candidate) {
@@ -142,7 +117,7 @@ export class CandidateService {
   async getCandidateRecruiterView(id: string) {
     const candidate = await this.db.candidate.findUnique({
       where: { id },
-      select: this.candidateRecruiterSelect,
+      select: candidateRecruiterSelect,
     });
 
     if (!candidate) {
@@ -155,7 +130,7 @@ export class CandidateService {
   findAllRecruiterView() {
     return this.db.candidate.findMany({
       orderBy: { createdAt: 'desc' },
-      select: this.candidateRecruiterSelect,
+      select: candidateRecruiterSelect,
     });
   }
 
@@ -169,7 +144,7 @@ export class CandidateService {
       throw new NotFoundException(`Candidate with id ${id} not found`);
     }
 
-    const email = dto.email ? this.normalizeEmail(dto.email) : undefined;
+    const email = dto.email ? normalizeEmail(dto.email) : undefined;
     const rest = dto;
 
     try {
@@ -179,7 +154,7 @@ export class CandidateService {
           ...rest,
           ...(email ? { email } : {}),
         },
-        select: this.candidatePublicSelect,
+        select: candidatePublicSelect,
       });
     } catch (error: unknown) {
       if (this.hasPrismaErrorCode(error, 'P2025')) {

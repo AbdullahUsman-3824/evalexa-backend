@@ -82,6 +82,15 @@ class ExperienceDto {
   isCurrent?: boolean;
 }
 
+class SkillDto {
+  @IsString()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+}
+
 export class PublicJobApplicationDto {
   @ValidateNested()
   @Type(() => PersonalDto)
@@ -96,4 +105,9 @@ export class PublicJobApplicationDto {
   @ValidateNested({ each: true })
   @Type(() => ExperienceDto)
   experience!: ExperienceDto[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SkillDto)
+  skills!: SkillDto[];
 }

@@ -8,6 +8,7 @@ import { UsersModule } from '../users/users.module';
 import { ApplicationController } from './application.controller';
 import { ApplicationService } from './application.service';
 import { RankingModule } from '../ranking/ranking.module';
+import { ProcessingModule } from '../processing/processing.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { RankingModule } from '../ranking/ranking.module';
     UsersModule,
     AuthModule,
     RankingModule,
+    ProcessingModule,
   ],
   controllers: [ApplicationController],
   providers: [ApplicationService, RecruiterRoleGuard],

@@ -47,6 +47,7 @@ model Job {
   aiConfig       JobAiConfig?
   resumeAnalyses ResumeAnalysis[]
 
+  jobProcessing JobProcessing? 
   jobSkills JobSkill[]
 
   @@index([companyId])

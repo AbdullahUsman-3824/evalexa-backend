@@ -10,6 +10,7 @@ import {
   EDUCATION_QUALIFICATION_TEXT,
   EXPERIENCE_QUALIFICATION_TEXT,
 } from './ranking.constants';
+import axios from 'axios';
 import {
   RankApiRequest,
   RankApiResponse,
@@ -73,6 +74,7 @@ export class RankingService {
   private async callRankingApi(
     payload: RankApiRequest,
   ): Promise<RankApiResponse> {
+    console.log('Calling ranking API with payload:', JSON.stringify(payload));
     try {
       const response = await firstValueFrom(
         this.http.post<RankApiResponse>(
@@ -82,6 +84,11 @@ export class RankingService {
       );
       return response.data;
     } catch (error) {
+      if (axios.isAxiosError(error)) {
+        this.logger.error(
+          `Ranking API 422: ${JSON.stringify(error.response?.data)}`,
+        );
+      }
       throw new BadRequestException(
         `Failed to score resume against job: ${
           error instanceof Error ? error.message : 'Unknown error'

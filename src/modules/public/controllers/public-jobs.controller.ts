@@ -108,7 +108,6 @@ export class PublicJobsController {
         errors.flatMap((e) => Object.values(e.constraints ?? {})),
       );
     }
-
     return this.publicJobsService.applyToJobWithParsedData(jobSlug, dto, file);
   }
 }

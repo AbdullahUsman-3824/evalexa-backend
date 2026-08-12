@@ -83,9 +83,18 @@ class ApplyWithParsedExperienceDto {
   isCurrent?: boolean;
 }
 
+class ApplyWithParsedSkillDto {
+  @IsString()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+}
+
 export class ApplyWithParsedDto {
   @ValidateNested()
-  @Type(() => ApplyWithParsedPersonalDto) 
+  @Type(() => ApplyWithParsedPersonalDto)
   personal!: ApplyWithParsedPersonalDto;
 
   @IsArray()
@@ -97,6 +106,11 @@ export class ApplyWithParsedDto {
   @ValidateNested({ each: true })
   @Type(() => ApplyWithParsedExperienceDto)
   experience!: ApplyWithParsedExperienceDto[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ApplyWithParsedSkillDto)
+  skills!: ApplyWithParsedSkillDto[];
 
   @IsUUID()
   jobId!: string;

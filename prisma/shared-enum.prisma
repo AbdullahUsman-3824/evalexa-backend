@@ -96,6 +96,11 @@ enum ProcessingTaskType {
     EMAIL_NOTIFICATION
 }
 
+enum TaskScope {
+    APPLICATION
+    JOB
+}
+
 // ================================
 // INTERVIEW
 // ================================

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullModule } from '@nestjs/bullmq';
 import { ApplicationModule } from './modules/application/application.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -16,6 +17,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { SkillsModule } from './modules/skills/skills.module';
 import { RankingModule } from './modules/ranking/ranking.module';
+import { ProcessingModule } from './modules/processing/processing.module';
 
 @Module({
   imports: [
@@ -26,6 +28,16 @@ import { RankingModule } from './modules/ranking/ranking.module';
     HttpModule.register({
       global: true,
       baseURL: FASTAPI_BASE_URL,
+    }),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        connection: {
+          url: config.get<string>('REDIS_URL'),
+          tls: {},
+        },
+      }),
     }),
     CompanyModule,
     DatabaseModule,
@@ -39,6 +51,7 @@ import { RankingModule } from './modules/ranking/ranking.module';
     ScreeningModule,
     SkillsModule,
     RankingModule,
+    ProcessingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
