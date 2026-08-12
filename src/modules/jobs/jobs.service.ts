@@ -561,7 +561,9 @@ export class JobsService {
     companyId: string | null | undefined,
     dto: CreateJobDto,
   ) {
-    this.validateSalaryRange(dto.salary.min, dto.salary.max);
+    if (dto.salary.min && dto.salary.max) {
+      this.validateSalaryRange(dto.salary.min, dto.salary.max);
+    }
 
     const ownedCompanyId = await this.resolveCompanyId(userId, companyId);
 

@@ -23,20 +23,24 @@ import { JobAiConfigDto } from './job-ai-config.dto';
 import { JobSkillInputDto } from './job-skill-input.dto';
 
 export class SalaryDto {
+  @IsOptional()
   @IsInt()
   @Min(0)
-  min!: number;
+  min?: number;
 
+  @IsOptional()
   @IsInt()
   @Min(0)
-  max!: number;
+  max?: number;
 
+  @IsOptional()
   @IsString()
   @MaxLength(10)
-  currency: string = 'PKR';
+  currency?: string = 'PKR';
 
+  @IsOptional()
   @IsEnum(SalaryPeriod)
-  period!: SalaryPeriod;
+  period?: SalaryPeriod;
 }
 
 export class CreateJobDto {
@@ -46,7 +50,7 @@ export class CreateJobDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(150)  // Changed from 255 to 150 to match schema
+  @MaxLength(150)
   department?: string;
 
   @IsOptional()
@@ -62,8 +66,6 @@ export class CreateJobDto {
 
   @IsString()
   description!: string;
-
-  // responsibilities removed - no longer in schema
 
   @IsOptional()
   @Type(() => Date)
@@ -88,7 +90,7 @@ export class CreateJobDto {
   @IsOptional()
   @IsInt()
   @Min(1)
-  totalOpenings?: number = 1;  // New field
+  totalOpenings?: number = 1;
 
   @IsArray()
   @ArrayMinSize(1)

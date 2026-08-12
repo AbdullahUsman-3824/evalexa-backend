@@ -40,7 +40,6 @@ export class RankingService {
 
     return {
       required_skills: requiredSkills,
-      responsibilities: '',
       qualifications: [
         EDUCATION_QUALIFICATION_TEXT[job.educationLevel],
         EXPERIENCE_QUALIFICATION_TEXT[job.experienceLevel],

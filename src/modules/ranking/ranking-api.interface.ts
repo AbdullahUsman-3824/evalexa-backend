@@ -2,7 +2,6 @@
 
 export interface JobRequirementsPayload {
   required_skills: string[];
-  responsibilities: string; // matches FastAPI's updated `str` type
   qualifications: string[];
   description: string;
 }
