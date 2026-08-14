@@ -11,6 +11,8 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { UploadedFiles } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
@@ -86,5 +88,44 @@ export class ApplicationController {
   @Get('job/:jobId')
   findAllByJob(@User() user: JwtPayload, @Param('jobId') jobId: string) {
     return this.applicationService.findAllByJob(user.companyId, jobId);
+  }
+
+  @UseGuards(JwtAuthGuard, RecruiterRoleGuard)
+  @Post('job/:jobId/bulk')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UseInterceptors(
+    FilesInterceptor('files', 100, {
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (ALLOWED_RESUME_MIME_TYPES.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(
+            new BadRequestException(
+              'Only PDF, DOC, and DOCX files are allowed',
+            ),
+            false,
+          );
+        }
+      },
+    }),
+  )
+  async bulkImport(
+    @User() user: JwtPayload,
+    @Param('jobId') jobId: string,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    if (!user.companyId) {
+      throw new BadRequestException('Recruiter must belong to a company');
+    }
+    if (!files?.length) {
+      throw new BadRequestException('At least one file is required');
+    }
+
+    return this.applicationService.bulkImportResumes(
+      jobId,
+      user.companyId,
+      files,
+    );
   }
 }

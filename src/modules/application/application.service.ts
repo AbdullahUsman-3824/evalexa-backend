@@ -17,6 +17,7 @@ import { UploadedResumeFileDto } from '../resume/dto/uploaded-resume-file.dto';
 import { ApplyWithParsedDto } from './dto/apply-with-parsed.dto';
 import { RankingService } from '../ranking/ranking.service';
 import { ApplicationProcessingProducer } from '../processing/producers/application-processing.producer';
+import type { Express } from 'express';
 
 @Injectable()
 export class ApplicationService {
@@ -224,5 +225,96 @@ export class ApplicationService {
       });
 
     return result;
+  }
+
+  async bulkImportResumes(
+    jobId: string,
+    companyId: string,
+    files: Express.Multer.File[],
+  ) {
+    if (!files?.length) {
+      throw new BadRequestException('At least one resume file is required');
+    }
+
+    await this.ensureJobAndCompanyExist(jobId, companyId);
+
+    const job = await this.db.job.findFirst({
+      where: { id: jobId, companyId },
+      select: { id: true },
+    });
+    if (!job) {
+      throw new NotFoundException('Job not found for this company');
+    }
+
+    const accepted: Array<{
+      applicationId: string;
+      candidateId: string;
+      resumeId: string;
+      fileName: string;
+    }> = [];
+    const rejected: Array<{ fileName: string; reason: string }> = [];
+
+    for (const file of files) {
+      const fileName = file.originalname ?? 'resume.pdf';
+      let resumeUrl: string | undefined;
+
+      try {
+        // Placeholder candidate until parse fills email/name
+        const candidate = await this.candidateService.createCandidate({
+          fullName: fileName.replace(/\.[^.]+$/, '') || 'Bulk Import',
+        });
+
+        const resume = await this.resumeService.uploadRawResumeForCandidate({
+          file: {
+            buffer: file.buffer,
+            originalname: fileName,
+            mimetype: file.mimetype,
+          },
+          candidateId: candidate.id,
+        });
+        resumeUrl = resume.resumeUrl;
+
+        const application = await this.db.application.create({
+          data: {
+            candidateId: candidate.id,
+            jobId,
+            companyId,
+            resumeId: resume.id,
+            status: ApplicationStatus.APPLIED,
+            source: ApplicationSource.IMPORT,
+          },
+          select: { id: true },
+        });
+
+        await this.applicationProcessingProducer.enqueueResumeParse(
+          application.id,
+          jobId,
+        );
+
+        accepted.push({
+          applicationId: application.id,
+          candidateId: candidate.id,
+          resumeId: resume.id,
+          fileName,
+        });
+      } catch (error) {
+        if (resumeUrl) {
+          await this.resumeService.deleteStorageFile(resumeUrl).catch(() => {});
+        }
+        rejected.push({
+          fileName,
+          reason: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    return {
+      jobId,
+      companyId,
+      accepted: accepted.length,
+      rejected: rejected.length,
+      applications: accepted,
+      errors: rejected,
+    };
   }
 }

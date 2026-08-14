@@ -17,6 +17,6 @@ import { ResumeParserService } from './resume-parser.service';
   ],
   controllers: [ResumeController],
   providers: [ResumeService, ResumeParserService],
-  exports: [ResumeService],
+  exports: [ResumeService, ResumeParserService],
 })
 export class ResumeModule {}

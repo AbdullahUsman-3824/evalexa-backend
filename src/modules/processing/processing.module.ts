@@ -5,11 +5,17 @@ import { JobProcessingService } from './services/job-processing.service';
 import { ProcessingTaskService } from './services/processing-task.service';
 import { ApplicationProcessingProducer } from './producers/application-processing.producer';
 import { ResumeAnalysisProcessor } from './processors/resume-analysis.processor';
-import { RankingProcessor } from './processors/ranking.processor';
-import { ShortlistingProcessor } from './processors/shortlisting.processor';
 import { DatabaseModule } from '../../database/database.module';
 import { RankingModule } from '../ranking/ranking.module';
 import { ProcessingController } from './processing.controller';
+import { JobWideProcessor } from './processors/job-wide.processor';
+import { ResumeModule } from '../resume/resume.module';
+import { CandidateModule } from '../candidate/candidate.module';
+import { UsersModule } from '../users/users.module';
+import { AuthModule } from '../auth/auth.module';
+import { RecruiterRoleGuard } from '../company/guards/recruiter-role.guard';
+
+// import { ResumeParseProcessor } from './processors/resume-parse.processor';
 
 @Module({
   imports: [
@@ -19,14 +25,19 @@ import { ProcessingController } from './processing.controller';
     ),
     DatabaseModule,
     RankingModule,
+    ResumeModule,
+    CandidateModule,
+    AuthModule,
+    UsersModule,
   ],
   providers: [
     JobProcessingService,
     ProcessingTaskService,
     ApplicationProcessingProducer,
     ResumeAnalysisProcessor,
-    RankingProcessor,
-    ShortlistingProcessor,
+    JobWideProcessor,
+    RecruiterRoleGuard,
+    // ResumeParseProcessor,
   ],
   controllers: [ProcessingController],
   exports: [ApplicationProcessingProducer, JobProcessingService],

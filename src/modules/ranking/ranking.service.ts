@@ -29,6 +29,7 @@ export class RankingService {
   ) {}
 
   private buildJobPayload(job: {
+    title: string;
     description: string;
     educationLevel: keyof typeof EDUCATION_QUALIFICATION_TEXT;
     experienceLevel: keyof typeof EXPERIENCE_QUALIFICATION_TEXT;
@@ -39,6 +40,7 @@ export class RankingService {
       .map((js) => js.skill.name);
 
     return {
+      title: job.title,
       required_skills: requiredSkills,
       qualifications: [
         EDUCATION_QUALIFICATION_TEXT[job.educationLevel],
@@ -73,7 +75,6 @@ export class RankingService {
   private async callRankingApi(
     payload: RankApiRequest,
   ): Promise<RankApiResponse> {
-    console.log('Calling ranking API with payload:', JSON.stringify(payload));
     try {
       const response = await firstValueFrom(
         this.http.post<RankApiResponse>(
@@ -114,6 +115,7 @@ export class RankingService {
         },
         job: {
           select: {
+            title: true,
             description: true,
             educationLevel: true,
             experienceLevel: true,
@@ -177,7 +179,10 @@ export class RankingService {
           experienceScore: Math.round(field_scores.experience_score * 100),
           educationScore: Math.round(field_scores.education_score * 100),
           overallScore: matchScorePercent,
-          recommendation,
+          matchedSkills: field_scores.matched_skills,
+          missingSkills: field_scores.missing_skills,
+          aiSummary: field_scores.ai_summary,
+          recommendation: recommendation,
           analysisVersion: (lastAnalysis?.analysisVersion ?? 0) + 1,
           isLatest: true,
         },

@@ -32,12 +32,16 @@ import { ProcessingModule } from './modules/processing/processing.module';
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        connection: {
-          url: config.get<string>('REDIS_URL'),
-          tls: {},
-        },
-      }),
+      useFactory: (config: ConfigService) => {
+        const url = config.get<string>('REDIS_URL');
+        const useTls = !!url?.startsWith('rediss://');
+        return {
+          connection: {
+            url,
+            ...(useTls ? { tls: {} } : {}),
+          },
+        };
+      },
     }),
     CompanyModule,
     DatabaseModule,

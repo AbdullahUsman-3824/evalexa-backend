@@ -27,4 +27,19 @@ export const jobApplicationsSelect = {
       uploadedAt: true,
     },
   },
+  analysis: {
+    where: {
+      isLatest: true,
+    },
+    select: {
+      skillMatchScore: true,
+      experienceScore: true,
+      educationScore: true,
+      overallScore: true,
+      matchedSkills: true,
+      missingSkills: true,
+      aiSummary: true,
+      recommendation: true,
+    },
+  },
 } satisfies Prisma.ApplicationSelect;

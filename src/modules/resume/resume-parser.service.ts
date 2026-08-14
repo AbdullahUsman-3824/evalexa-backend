@@ -3,6 +3,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 import FormData from 'form-data';
 import { FASTAPI_ENDPOINTS } from '../../common/constants/fastapi.constants';
+import axios from 'axios';
 
 export interface ResumeBasics {
   fullName: string;
@@ -99,6 +100,16 @@ export class ResumeParserService {
     input: string | Buffer,
     fileName?: string,
   ): Promise<ParsedResumeData> {
+    if (typeof input === 'string') {
+      // URL se file fetch karo, buffer mein convert karo
+      const fileResponse = await firstValueFrom(
+        this.httpService.get(input, { responseType: 'arraybuffer' }),
+      );
+      const buffer = Buffer.from(fileResponse.data);
+      const derivedFileName =
+        fileName || input.split('/').pop() || 'resume.pdf';
+      return this.parseResume(buffer, derivedFileName);
+    }
     try {
       const response = await firstValueFrom(
         this.httpService.post<ResumeParserResponse>(
@@ -116,13 +127,22 @@ export class ResumeParserService {
 
       return parsed;
     } catch (error) {
-      console.log('Error parsing resume:', error);
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new BadRequestException(
-        `Failed to parse resume: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
+
+      if (axios.isAxiosError(error)) {
+        console.log('Resume parse error status:', error.response?.status);
+        console.log(
+          'Resume parse error detail:',
+          JSON.stringify(error.response?.data, null, 2),
+        );
+      } else {
+        console.log('Error parsing resume:', error);
+      }
+
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      throw new BadRequestException(`Failed to parse resume: ${message}`);
     }
   }
 

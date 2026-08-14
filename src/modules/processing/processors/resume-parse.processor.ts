@@ -10,11 +10,10 @@ import { DatabaseService } from '../../../database/database.service';
 import { ResumeParserService } from '../../resume/resume-parser.service';
 import { ResumeService } from '../../resume/resume.service';
 import { CandidateService } from '../../candidate/candidate.service';
-import { RankingService } from '../../ranking/ranking.service';
 
-@Processor(QUEUE_NAMES.APPLICATION_PROCESSING, { concurrency: 20 })
-export class ResumeAnalysisProcessor extends WorkerHost {
-  private readonly logger = new Logger(ResumeAnalysisProcessor.name);
+@Processor(QUEUE_NAMES.APPLICATION_PROCESSING, { concurrency: 10 })
+export class ResumeParseProcessor extends WorkerHost {
+  private readonly logger = new Logger(ResumeParseProcessor.name);
 
   constructor(
     private readonly taskService: ProcessingTaskService,
@@ -23,30 +22,16 @@ export class ResumeAnalysisProcessor extends WorkerHost {
     private readonly resumeParser: ResumeParserService,
     private readonly resumeService: ResumeService,
     private readonly candidateService: CandidateService,
-    private readonly rankingService: RankingService,
     @InjectQueue(QUEUE_NAMES.APPLICATION_PROCESSING)
     private readonly appQueue: Queue,
-    @InjectQueue(QUEUE_NAMES.JOB_PROCESSING)
-    private readonly jobQueue: Queue,
   ) {
     super();
   }
 
   async process(job: Job<ApplicationTaskJobData>) {
-    switch (job.name) {
-      case 'resume-parse':
-        return this.runParse(job.data);
-      case 'resume-analysis':
-        return this.runAnalysis(job.data);
-      default:
-        throw new Error(`Unknown application-processing job: ${job.name}`);
-    }
-  }
+    if (job.name !== 'resume-parse') return;
 
-  // ── bulk path: parse then chain to analysis ─────────────────────────
-
-  private async runParse(data: ApplicationTaskJobData) {
-    const { applicationId, jobId, jobProcessingId, taskId } = data;
+    const { applicationId, jobId, jobProcessingId, taskId } = job.data;
 
     await this.taskService.markRunning(taskId);
 
@@ -71,6 +56,7 @@ export class ResumeAnalysisProcessor extends WorkerHost {
 
       const { resume } = application;
 
+      // Prefer URL parse (file already in storage)
       const parsed = await this.resumeParser.parseResume(
         resume.resumeUrl,
         resume.fileName ?? undefined,
@@ -78,21 +64,42 @@ export class ResumeAnalysisProcessor extends WorkerHost {
 
       await this.resumeService.saveParsedData(resume.id, parsed);
 
+      // Enrich candidate from parsed basics when possible
       const email = parsed.basics?.email?.trim().toLowerCase() || undefined;
       const fullName =
         parsed.basics?.fullName?.trim() ||
         resume.fileName?.replace(/\.[^.]+$/, '') ||
         'Unknown Candidate';
 
-      await this.candidateService.updateCandidate(resume.candidateId, {
-        fullName,
-        ...(email ? { email } : {}),
-        phone: parsed.basics?.phone || undefined,
-        location: parsed.basics?.location || undefined,
-      });
+      if (email) {
+        const existing = await this.candidateService.findByEmail(email);
+        if (existing && existing.id !== resume.candidateId) {
+          // Another candidate already owns this email.
+          // Keep current application candidate; optionally merge later.
+          await this.candidateService.updateCandidate(resume.candidateId, {
+            fullName,
+            phone: parsed.basics?.phone || undefined,
+            location: parsed.basics?.location || undefined,
+          });
+        } else {
+          await this.candidateService.updateCandidate(resume.candidateId, {
+            fullName,
+            email,
+            phone: parsed.basics?.phone || undefined,
+            location: parsed.basics?.location || undefined,
+          });
+        }
+      } else {
+        await this.candidateService.updateCandidate(resume.candidateId, {
+          fullName,
+          phone: parsed.basics?.phone || undefined,
+          location: parsed.basics?.location || undefined,
+        });
+      }
 
       await this.taskService.markCompleted(taskId);
 
+      // Chain into existing scoring stage (do NOT markApplicationDone here)
       const analysisTask = await this.taskService.createApplicationTask(
         jobProcessingId,
         applicationId,
@@ -116,7 +123,7 @@ export class ResumeAnalysisProcessor extends WorkerHost {
       );
     } catch (error) {
       this.logger.error(
-        `Resume parse failed for ${applicationId}: ${
+        `Resume parse failed for application ${applicationId}: ${
           error instanceof Error ? error.message : error
         }`,
       );
@@ -128,6 +135,7 @@ export class ResumeAnalysisProcessor extends WorkerHost {
 
       if (!allDone) return;
 
+      // Same gate as ResumeAnalysisProcessor: only one worker claims ranking
       const claimed = await this.jobProcessingService.claimRanking(jobId);
       if (!claimed) return;
 
@@ -138,7 +146,8 @@ export class ResumeAnalysisProcessor extends WorkerHost {
         return;
       }
 
-      await this.jobQueue.add(
+      // Some other apps already scored successfully — kick off ranking
+      await this.appQueue.add(
         'ranking',
         { jobId, jobProcessingId },
         {
@@ -149,54 +158,5 @@ export class ResumeAnalysisProcessor extends WorkerHost {
         },
       );
     }
-  }
-
-  // ── score path (normal apply + after successful parse) ──────────────
-
-  private async runAnalysis(data: ApplicationTaskJobData) {
-    const { applicationId, jobId, jobProcessingId, taskId } = data;
-
-    await this.taskService.markRunning(taskId);
-
-    let success = true;
-    try {
-      const result = await this.rankingService.scoreApplication(applicationId);
-      if (!result) {
-        throw new Error('Application not found or resume not yet parsed');
-      }
-      await this.taskService.markCompleted(taskId);
-    } catch (error) {
-      success = false;
-      await this.taskService.markFailed(taskId, error);
-    }
-
-    const {
-      allDone,
-      processed,
-      jobProcessingId: jpId,
-    } = await this.jobProcessingService.markApplicationDone(jobId, success);
-
-    if (!allDone) return;
-
-    const claimed = await this.jobProcessingService.claimRanking(jobId);
-    if (!claimed) return;
-
-    if (processed === 0) {
-      await this.jobProcessingService.markJobWideNoSuccessfulApplications(
-        jobId,
-      );
-      return;
-    }
-
-    await this.jobQueue.add(
-      'ranking',
-      { jobId, jobProcessingId: jpId || jobProcessingId },
-      {
-        jobId: `ranking-${jobId}`,
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 5000 },
-        removeOnComplete: true,
-      },
-    );
   }
 }

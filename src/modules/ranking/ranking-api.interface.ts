@@ -1,6 +1,7 @@
 // Mirrors FastAPI's pydantic models (app/models/ranking.py, job.py, resume.py)
 
 export interface JobRequirementsPayload {
+  title?: string;
   required_skills: string[];
   qualifications: string[];
   description: string;
@@ -54,6 +55,9 @@ export interface FieldScores {
   skills_score: number;
   experience_score: number;
   education_score: number;
+  matched_skills: string[];
+  missing_skills: string[];
+  ai_summary: string | null;
 }
 
 export interface RankApiResponse {

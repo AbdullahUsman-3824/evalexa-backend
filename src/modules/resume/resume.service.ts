@@ -123,6 +123,74 @@ export class ResumeService {
   }
 
   /**
+   * Bulk path: upload file + create Resume row with NO parsedData.
+   * Parsing happens later in ResumeParseProcessor.
+   */
+  async uploadRawResumeForCandidate(
+    params: {
+      file: UploadedResumeFileDto;
+      candidateId: string;
+    },
+    db: Db = this.db,
+  ) {
+    const { file, candidateId } = params;
+    const resumeUrl = await this.uploadToSupabase(file);
+
+    const resume = await db.resume.create({
+      data: {
+        candidateId,
+        resumeUrl,
+        fileName: file.originalname,
+        parsedData: Prisma.DbNull,
+        isPrimary: false,
+      },
+    });
+
+    return resume;
+  }
+
+  /**
+   * After FastAPI parse succeeds: persist structured data on the resume.
+   */
+  async saveParsedData(
+    resumeId: string,
+    parsed: ParsedResumeData,
+    db: Db = this.db,
+  ) {
+    const extractedSkills = Array.from(
+      new Map(
+        (parsed.skills ?? [])
+          .map((s) => this.normalizeText(s.name))
+          .filter((name): name is string => Boolean(name))
+          .map((name) => [name.toLowerCase(), name] as const),
+      ).values(),
+    );
+
+    const extractedExperience = this.sumExperienceMonths(
+      (parsed.experience ?? []).map((e) => ({
+        title: e.title ?? '',
+        company: e.company,
+        startDate: e.startDate,
+        endDate: e.endDate,
+        isCurrent: e.isCurrent,
+      })),
+    );
+
+    const extractedEducation =
+      this.normalizeText(parsed.education?.[0]?.degree) ?? null;
+
+    return db.resume.update({
+      where: { id: resumeId },
+      data: {
+        parsedData: parsed as unknown as object,
+        extractedSkills: extractedSkills as unknown as object,
+        extractedExperience,
+        extractedEducation,
+      },
+    });
+  }
+
+  /**
    * Cleanup: called when a transaction fails AFTER the file was already
    * uploaded to storage (Prisma can roll back the row insert, but not the
    * external storage write).
