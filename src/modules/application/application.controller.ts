@@ -10,6 +10,7 @@ import {
   UploadedFile,
   UseGuards,
   UseInterceptors,
+  Query,
 } from '@nestjs/common';
 import { UploadedFiles } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
@@ -22,6 +23,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { RecruiterRoleGuard } from '../company/guards/recruiter-role.guard';
 import { ApplyWithParsedDto } from './dto/apply-with-parsed.dto';
+import { FindJobApplicationsQueryDto } from './dto/find-job-applications-query.dto';
 import { ApplicationService } from './application.service';
 
 const ALLOWED_RESUME_MIME_TYPES = [
@@ -34,6 +36,7 @@ const ALLOWED_RESUME_MIME_TYPES = [
 export class ApplicationController {
   constructor(private readonly applicationService: ApplicationService) {}
 
+  // Apply with parsed data and a resume file
   @Post('apply')
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(
@@ -84,12 +87,18 @@ export class ApplicationController {
     return this.applicationService.applyWithParsedData(dto, file);
   }
 
+  // Get all applications for a job
+  @Get('jobs/:jobId')
   @UseGuards(JwtAuthGuard, RecruiterRoleGuard)
-  @Get('job/:jobId')
-  findAllByJob(@User() user: JwtPayload, @Param('jobId') jobId: string) {
-    return this.applicationService.findAllByJob(user.companyId, jobId);
+  findAllByJob(
+    @User() user: JwtPayload,
+    @Param('jobId') jobId: string,
+    @Query() query: FindJobApplicationsQueryDto,
+  ) {
+    return this.applicationService.findAllByJob(user.companyId, jobId, query);
   }
 
+  // Upload multiple resumes for a job (bulk import)
   @UseGuards(JwtAuthGuard, RecruiterRoleGuard)
   @Post('job/:jobId/bulk')
   @HttpCode(HttpStatus.ACCEPTED)

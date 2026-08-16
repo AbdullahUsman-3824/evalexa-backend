@@ -7,8 +7,8 @@ import {
   HttpException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { ApplicationSource, ApplicationStatus } from '@prisma/client';
-import { jobApplicationsSelect } from './application.select';
+import { ApplicationSource, ApplicationStatus, Prisma } from '@prisma/client';
+import { jobApplicationsListSelect } from './application.select';
 import { isUUID } from 'class-validator';
 import { CandidateService } from '../candidate/candidate.service';
 import { DatabaseService } from '../../database/database.service';
@@ -16,6 +16,7 @@ import { ResumeService } from '../resume/resume.service';
 import { UploadedResumeFileDto } from '../resume/dto/uploaded-resume-file.dto';
 import { ApplyWithParsedDto } from './dto/apply-with-parsed.dto';
 import { RankingService } from '../ranking/ranking.service';
+import { FindJobApplicationsQueryDto } from './dto/find-job-applications-query.dto';
 import { ApplicationProcessingProducer } from '../processing/producers/application-processing.producer';
 import type { Express } from 'express';
 
@@ -74,30 +75,105 @@ export class ApplicationService {
     });
   }
 
-  async findAllByJob(companyId: string | null | undefined, jobId: string) {
+  async findAllByJob(
+    companyId: string | null | undefined,
+    jobId: string,
+    query: FindJobApplicationsQueryDto,
+  ) {
     if (!companyId) {
       throw new BadRequestException(
         'Recruiter must have a company to list job applications',
       );
     }
+
     if (!isUUID(jobId)) {
       throw new BadRequestException('jobId must be a valid UUID');
     }
 
-    const [job, applications] = await Promise.all([
-      this.db.job.findFirst({
-        where: { id: jobId, companyId },
-        select: { id: true },
+    const {
+      page = 1,
+      limit = 20,
+      search,
+      status,
+      sortBy = 'rankPosition',
+      sortOrder = 'asc',
+    } = query;
+
+    // Make sure the job belongs to the recruiter's company.
+    const job = await this.db.job.findFirst({
+      where: {
+        id: jobId,
+        companyId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!job) {
+      throw new NotFoundException('Job not found');
+    }
+
+    const where: Prisma.ApplicationWhereInput = {
+      jobId,
+      companyId,
+
+      ...(status && {
+        status,
       }),
+
+      ...(search && {
+        candidate: {
+          OR: [
+            {
+              fullName: {
+                contains: search,
+                mode: 'insensitive',
+              },
+            },
+            {
+              email: {
+                contains: search,
+                mode: 'insensitive',
+              },
+            },
+          ],
+        },
+      }),
+    };
+
+    const orderBy: Prisma.ApplicationOrderByWithRelationInput =
+      sortBy === 'matchScore'
+        ? { matchScore: sortOrder }
+        : sortBy === 'appliedAt'
+          ? { appliedAt: sortOrder }
+          : { rankPosition: sortOrder };
+
+    const skip = (page - 1) * limit;
+
+    const [total, applications] = await Promise.all([
+      this.db.application.count({
+        where,
+      }),
+
       this.db.application.findMany({
-        where: { jobId, companyId },
-        orderBy: { appliedAt: 'desc' },
-        select: jobApplicationsSelect,
+        where,
+        orderBy,
+        skip,
+        take: limit,
+        select: jobApplicationsListSelect,
       }),
     ]);
 
-    if (!job) throw new NotFoundException('Job not found');
-    return applications;
+    return {
+      data: applications,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async applyWithParsedData(
@@ -205,15 +281,6 @@ export class ApplicationService {
       throw new InternalServerErrorException(message);
     }
 
-    // this.rankingService
-    //   .scoreAndRankApplication(result.applicationId)
-    //   .catch((error) => {
-    //     this.logger.error(
-    //       `Background ranking failed for application ${result.applicationId}: ${
-    //         error instanceof Error ? error.message : error
-    //       }`,
-    //     );
-    //   });
     this.applicationProcessingProducer
       .enqueueApplicationProcessing(result.applicationId, dto.jobId)
       .catch((error) => {

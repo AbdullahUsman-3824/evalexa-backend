@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { JobStatus, Prisma } from '@prisma/client';
+import { publicJobSelect, jobSelect, jobListSelect } from './jobs.select';
 import { DatabaseService } from '../../database/database.service';
 import {
   PublicJobsQueryDto,
@@ -13,142 +14,6 @@ import {
 import { CreateJobDto } from './dto/create-job.dto';
 import { FindJobsQueryDto, JobSortBy } from './dto/find-jobs-query.dto';
 import { UpdateJobDto } from './dto/update-job.dto';
-
-const jobSelect = {
-  id: true,
-  companyId: true,
-  createdBy: true,
-  title: true,
-  slug: true,
-  department: true,
-  description: true,
-  jobType: true,
-  experienceLevel: true,
-  educationLevel: true,
-  salaryMin: true,
-  salaryMax: true,
-  salaryCurrency: true,
-  salaryPeriod: true,
-  location: true,
-  workModel: true,
-  status: true,
-  applicationDeadline: true,
-  totalOpenings: true,
-  createdAt: true,
-  updatedAt: true,
-  company: {
-    select: {
-      id: true,
-      name: true,
-      logo: true,
-      location: true,
-    },
-  },
-  creator: {
-    select: {
-      id: true,
-      fullName: true,
-      email: true,
-    },
-  },
-  aiConfig: {
-    select: {
-      id: true,
-      jobId: true,
-      enableRanking: true,
-      enableAutoShortlisting: true,
-      shortlistLimit: true,
-      minimumMatchScore: true,
-      enableAiInterview: true,
-      interviewLimit: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  },
-  jobSkills: {
-    select: {
-      jobId: true,
-      skillId: true,
-      importance: true,
-      weight: true,
-      skill: {
-        select: {
-          id: true,
-          name: true,
-          category: true,
-        },
-      },
-    },
-  },
-} satisfies Prisma.JobSelect;
-
-const jobListSelect = {
-  id: true,
-  title: true,
-  applicationDeadline: true,
-  status: true,
-  totalOpenings: true,
-  _count: {
-    select: {
-      applications: true,
-    },
-  },
-} satisfies Prisma.JobSelect;
-
-const publicCompanySelect = {
-  id: true,
-  name: true,
-  slug: true,
-  logo: true,
-  banner: true,
-  industry: true,
-  size: true,
-  type: true,
-  website: true,
-  location: true,
-  description: true,
-  verificationStatus: true,
-  createdAt: true,
-  updatedAt: true,
-} satisfies Prisma.CompanySelect;
-
-const publicJobSelect = {
-  id: true,
-  title: true,
-  slug: true,
-  department: true,
-  description: true,
-  jobType: true,
-  experienceLevel: true,
-  educationLevel: true,
-  salaryMin: true,
-  salaryMax: true,
-  salaryCurrency: true,
-  salaryPeriod: true,
-  location: true,
-  workModel: true,
-  status: true,
-  applicationDeadline: true,
-  totalOpenings: true,
-  createdAt: true,
-  updatedAt: true,
-  company: {
-    select: publicCompanySelect,
-  },
-  jobSkills: {
-    select: {
-      importance: true,
-      weight: true,
-      skill: {
-        select: {
-          id: true,
-          name: true,
-          category: true,
-        },
-      },
-    },
-  },
-} satisfies Prisma.JobSelect;
 
 @Injectable()
 export class JobsService {
@@ -174,19 +39,6 @@ export class JobsService {
     }
 
     return user.companyId;
-  }
-
-  async findTitles(userId: string, companyId: string | null | undefined) {
-    const ownedCompanyId = await this.resolveCompanyId(userId, companyId);
-
-    return this.db.job.findMany({
-      where: { companyId: ownedCompanyId },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-      },
-    });
   }
 
   private slugifySegment(value: string): string {
@@ -458,19 +310,13 @@ export class JobsService {
     const job = await this.db.job.findFirst({
       where: {
         slug: jobSlug,
+        status: JobStatus.OPEN,
+        applicationDeadline: { gte: new Date() },
       },
       select: publicJobSelect,
     });
 
     if (!job) {
-      throw new NotFoundException(`Job with slug ${jobSlug} not found`);
-    }
-
-    if (
-      job.status !== JobStatus.OPEN ||
-      !job.applicationDeadline ||
-      job.applicationDeadline < new Date()
-    ) {
       throw new NotFoundException(`Job with slug ${jobSlug} not found`);
     }
 
@@ -676,6 +522,19 @@ export class JobsService {
     }));
   }
 
+  async findTitles(userId: string, companyId: string | null | undefined) {
+    const ownedCompanyId = await this.resolveCompanyId(userId, companyId);
+
+    return this.db.job.findMany({
+      where: { companyId: ownedCompanyId, status: JobStatus.OPEN },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+      },
+    });
+  }
+
   async findOne(
     userId: string,
     companyId: string | null | undefined,
@@ -696,6 +555,40 @@ export class JobsService {
     }
 
     return job;
+  }
+
+  async getSummary(
+    userId: string,
+    companyId: string | null | undefined,
+    id: string,
+  ) {
+    const ownedCompanyId = await this.resolveCompanyId(userId, companyId);
+
+    const job = await this.db.job.findFirst({
+      where: {
+        id,
+        companyId: ownedCompanyId,
+      },
+      select: {
+        id: true,
+        title: true,
+        totalOpenings: true,
+        _count: {
+          select: { applications: true },
+        },
+      },
+    });
+
+    if (!job) {
+      throw new NotFoundException(`Job with id ${id} not found`);
+    }
+
+    return {
+      id: job.id,
+      title: job.title,
+      openings: job.totalOpenings,
+      applications: job._count.applications,
+    };
   }
 
   async update(

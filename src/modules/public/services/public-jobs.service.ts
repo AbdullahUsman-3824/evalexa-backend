@@ -50,13 +50,6 @@ export class PublicJobsService {
       throw new GoneException('This job posting has expired');
     }
 
-    // Also check if the job is still open (redundant but safe)
-    if (job.status !== 'OPEN') {
-      throw new GoneException(
-        'This job posting is no longer accepting applications',
-      );
-    }
-
     const applicationDto: ApplyWithParsedDto = {
       ...dto,
       jobId: job.id,

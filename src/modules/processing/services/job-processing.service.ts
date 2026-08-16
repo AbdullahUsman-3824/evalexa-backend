@@ -173,40 +173,30 @@ export class JobProcessingService {
   async getStatusByJobId(jobId: string) {
     const jp = await this.db.jobProcessing.findUnique({
       where: { jobId },
-      include: {
-        tasks: {
-          orderBy: { createdAt: 'desc' },
-          take: 50,
-          select: {
-            id: true,
-            applicationId: true,
-            taskType: true,
-            scope: true,
-            status: true,
-            error: true,
-            retryCount: true,
-            startedAt: true,
-            completedAt: true,
-            createdAt: true,
-          },
-        },
-      },
     });
 
     if (!jp) return null;
+
+    const total = jp.totalApplications;
+    const completed = jp.processedApplications;
+    const failed = jp.failedApplications;
+    const processing = Math.max(total - completed - failed, 0);
 
     return {
       jobId: jp.jobId,
       jobProcessingId: jp.id,
       status: jp.status,
       currentTask: jp.currentTask,
-      totalApplications: jp.totalApplications,
-      processedApplications: jp.processedApplications,
-      failedApplications: jp.failedApplications,
+      progress: {
+        total,
+        completed,
+        processing,
+        failed,
+      },
       startedAt: jp.startedAt,
       completedAt: jp.completedAt,
+      retryCount: jp.retryCount,
       lastError: jp.lastError,
-      tasks: jp.tasks,
     };
   }
 

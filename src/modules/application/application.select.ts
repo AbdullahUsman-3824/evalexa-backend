@@ -43,3 +43,20 @@ export const jobApplicationsSelect = {
     },
   },
 } satisfies Prisma.ApplicationSelect;
+
+export const jobApplicationsListSelect = {
+  id: true,
+  status: true,
+  source: true,
+  matchScore: true,
+  rankPosition: true,
+  appliedAt: true,
+
+  candidate: {
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+    },
+  },
+};

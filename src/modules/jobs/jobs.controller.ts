@@ -22,26 +22,31 @@ import { JobsService } from './jobs.service';
 export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
 
+  // Create a new job posting
   @Post()
   create(@User() user: JwtPayload, @Body() dto: CreateJobDto) {
     return this.jobsService.create(user.sub, user.companyId, dto);
   }
 
+  // Get a list of all job postings
   @Get()
-  findAfindll(@User() user: JwtPayload, @Query() query: FindJobsQueryDto) {
-    return this.jobsService.findAll(user.sub, user.companyId, query);
-  }
-
-  @Get('detailed')
   findAll(@User() user: JwtPayload, @Query() query: FindJobsQueryDto) {
     return this.jobsService.findAll(user.sub, user.companyId, query);
   }
 
+  // Get only job titles for the dropdowns like stuff
   @Get('titles')
   findTitles(@User() user: JwtPayload) {
     return this.jobsService.findTitles(user.sub, user.companyId);
   }
 
+  // Get summary of a single job posting by ID
+  @Get(':id/summary')
+  async getSummary(@User() user: JwtPayload, @Param('id') id: string) {
+    return this.jobsService.getSummary(user.sub, user.companyId, id);
+  }
+
+  // Get a single job posting by ID
   @Get(':id')
   findOne(@User() user: JwtPayload, @Param('id') id: string) {
     return this.jobsService.findOne(user.sub, user.companyId, id);
