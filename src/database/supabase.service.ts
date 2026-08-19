@@ -44,46 +44,54 @@ export class SupabaseService implements OnModuleInit {
 
   private async ensureRequiredBuckets(): Promise<void> {
     const client = this.getClient();
-    const { data: buckets, error } = await client.storage.listBuckets();
 
-    if (error) {
-      throw new Error(`Failed to list Supabase buckets: ${error.message}`);
-    }
+    try {
+      const { data: buckets, error } = await client.storage.listBuckets();
 
-    const bucketsByName = new Map(
-      buckets.map((bucket) => [bucket.name, bucket]),
-    );
-
-    for (const bucket of this.requiredBuckets) {
-      const existing = bucketsByName.get(bucket.name);
-
-      if (!existing) {
-        const { error: createError } = await client.storage.createBucket(
-          bucket.name,
-          { public: bucket.public },
-        );
-
-        if (createError) {
-          throw new Error(
-            `Failed to create Supabase bucket "${bucket.name}": ${createError.message}`,
-          );
-        }
-
-        continue;
+      if (error) {
+        throw new Error(`Failed to list Supabase buckets: ${error.message}`);
       }
 
-      if (existing.public !== bucket.public) {
-        const { error: updateError } = await client.storage.updateBucket(
-          bucket.name,
-          { public: bucket.public },
-        );
+      const bucketsByName = new Map(
+        buckets.map((bucket) => [bucket.name, bucket]),
+      );
 
-        if (updateError) {
-          throw new Error(
-            `Failed to update Supabase bucket "${bucket.name}": ${updateError.message}`,
+      for (const bucket of this.requiredBuckets) {
+        const existing = bucketsByName.get(bucket.name);
+
+        if (!existing) {
+          const { error: createError } = await client.storage.createBucket(
+            bucket.name,
+            { public: bucket.public },
           );
+
+          if (createError) {
+            throw new Error(
+              `Failed to create Supabase bucket "${bucket.name}": ${createError.message}`,
+            );
+          }
+
+          continue;
+        }
+
+        if (existing.public !== bucket.public) {
+          const { error: updateError } = await client.storage.updateBucket(
+            bucket.name,
+            { public: bucket.public },
+          );
+
+          if (updateError) {
+            throw new Error(
+              `Failed to update Supabase bucket "${bucket.name}": ${updateError.message}`,
+            );
+          }
         }
       }
+    } catch (error) {
+      console.warn(
+        'Supabase storage bucket setup skipped because the storage service is unavailable:',
+        error instanceof Error ? error.message : error,
+      );
     }
   }
 }

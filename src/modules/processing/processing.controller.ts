@@ -45,9 +45,33 @@ export class ProcessingController {
   @Get('jobs/:jobId/status')
   async jobStatus(@Param('jobId') jobId: string) {
     const status = await this.jobProcessingService.getStatusByJobId(jobId);
-    if (!status) {
-      throw new NotFoundException(`No processing state for job ${jobId}`);
+
+    if (status) {
+      return status;
     }
-    return status;
+
+    const created = await this.jobProcessingService.getOrCreate(jobId);
+
+    return {
+      jobId: created.jobId,
+      jobProcessingId: created.id,
+      status: created.status,
+      currentTask: created.currentTask,
+      progress: {
+        total: created.totalApplications,
+        completed: created.processedApplications,
+        processing: Math.max(
+          created.totalApplications -
+            created.processedApplications -
+            created.failedApplications,
+          0,
+        ),
+        failed: created.failedApplications,
+      },
+      startedAt: created.startedAt,
+      completedAt: created.completedAt,
+      retryCount: created.retryCount,
+      lastError: created.lastError,
+    };
   }
 }
