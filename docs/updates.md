@@ -150,16 +150,17 @@ GET /application/jobs/:jobId
 ```
 
 **Query Parameters:**
-| Parameter   | Type                | Required | Default        | Description                                  |
+| Parameter | Type | Required | Default | Description |
 | ----------- | ------------------- | -------- | -------------- | -------------------------------------------- |
-| `page`      | number              | No       | `1`            | Page number                                  |
-| `limit`     | number              | No       | `20`           | Number of applications per page, max `100`   |
-| `search`    | string              | No       | —              | Searches candidate name or email             |
-| `status`    | `ApplicationStatus` | No       | —              | Filters applications by status               |
-| `sortBy`    | enum                | No       | `rankPosition` | `rankPosition`, `matchScore`, or `appliedAt` |
-| `sortOrder` | enum                | No       | `asc`          | `asc` or `desc`                              |
+| `page` | number | No | `1` | Page number |
+| `limit` | number | No | `20` | Number of applications per page, max `100` |
+| `search` | string | No | — | Searches candidate name or email |
+| `status` | `ApplicationStatus` | No | — | Filters applications by status |
+| `sortBy` | enum | No | `rankPosition` | `rankPosition`, `matchScore`, or `appliedAt` |
+| `sortOrder` | enum | No | `asc` | `asc` or `desc` |
 
 **Example Request:**
+
 ```http
 GET /application/jobs/8f3c...?
 page=1&
@@ -259,7 +260,81 @@ Poll jab tak `status` `RUNNING` / `PENDING` ho; `COMPLETED` / `FAILED` par band 
 
 ---
 
-## 7. Retry one application
+## 7. Get single application detail
+
+```http
+GET /application/:id
+```
+
+**Auth:** Recruiter (JWT). Verifies `application.companyId === recruiter.companyId` — returns `403` otherwise.
+
+**Response `200`:**
+
+```json
+{
+  "application": {
+    "id": "application-uuid",
+    "status": "SHORTLISTED",
+    "source": "FORM_FILL",
+    "matchScore": 92.5,
+    "rankPosition": 3,
+    "isAutoShortlisted": true,
+    "appliedAt": "2026-08-16T12:30:00.000Z",
+    "updatedAt": "2026-08-16T12:35:00.000Z"
+  },
+  "job": {
+    "id": "job-uuid",
+    "title": "Senior Nurse",
+    "slug": "senior-nurse"
+  },
+  "candidate": {
+    "id": "candidate-uuid",
+    "fullName": "Ali Khan",
+    "email": "ali@example.com",
+    "phone": "+92...",
+    "linkedinUrl": "...",
+    "portfolioUrl": "...",
+    "location": "Lahore"
+  },
+  "resume": {
+    "id": "resume-uuid",
+    "resumeUrl": "...",
+    "fileName": "ali-khan-resume.pdf",
+    "description": "...",
+    "extractedSkills": [],
+    "extractedExperience": 5,
+    "extractedEducation": "BS Nursing",
+    "isPrimary": true,
+    "uploadedAt": "2026-08-16T12:20:00.000Z"
+  },
+  "analysis": {
+    "skillMatchScore": 94,
+    "experienceScore": 90,
+    "educationScore": 88,
+    "overallScore": 92,
+    "matchedSkills": [],
+    "missingSkills": [],
+    "strengths": [],
+    "weaknesses": [],
+    "aiSummary": "...",
+    "recommendation": "STRONG_MATCH",
+    "analyzedAt": "2026-08-16T12:40:00.000Z"
+  },
+  "processing": {
+    "resumeParse": "COMPLETED",
+    "resumeAnalysis": "COMPLETED"
+  }
+}
+```
+
+**Nullable:** `analysis` is `null` if AI analysis hasn't run yet. `processing` values are `null` if that task hasn't been created.  
+**`recommendation`:** `STRONG_MATCH` | `GOOD_MATCH` | `AVERAGE_MATCH` | `WEAK_MATCH`  
+**`processing` statuses:** `PENDING` | `RUNNING` | `COMPLETED` | `FAILED` | `CANCELLED` | `SKIPPED`  
+**Errors:** `400` invalid UUID · `403` application belongs to a different company · `404` not found · `401` unauthenticated
+
+---
+
+## 8. Retry one application
 
 ```http
 POST /processing/applications/:applicationId/retry

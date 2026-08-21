@@ -1,14 +1,23 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
   HttpException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { ApplicationSource, ApplicationStatus, Prisma } from '@prisma/client';
-import { jobApplicationsListSelect } from './application.select';
+import {
+  ApplicationSource,
+  ApplicationStatus,
+  Prisma,
+  ProcessingTaskType,
+} from '@prisma/client';
+import {
+  jobApplicationsListSelect,
+  applicationDetailSelect,
+} from './application.select';
 import { isUUID } from 'class-validator';
 import { CandidateService } from '../candidate/candidate.service';
 import { DatabaseService } from '../../database/database.service';
@@ -32,47 +41,73 @@ export class ApplicationService {
     private readonly applicationProcessingProducer: ApplicationProcessingProducer,
   ) {}
 
-  private normalizeText(value?: string | null): string | undefined {
-    if (typeof value !== 'string') return undefined;
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-  }
-
-  private normalizeEmail(value?: string): string | undefined {
-    const normalized = this.normalizeText(value);
-    return normalized ? normalized.toLowerCase() : undefined;
-  }
-
-  private buildFullName(firstName: string, lastName: string): string {
-    return [firstName.trim(), lastName.trim()].filter(Boolean).join(' ').trim();
-  }
-
-  private safeUpdate<T extends object>(data: T): Partial<T> {
-    return Object.fromEntries(
-      Object.entries(data).filter(([, value]) => value !== undefined),
-    ) as Partial<T>;
-  }
-
-  private async ensureJobAndCompanyExist(jobId: string, companyId: string) {
-    const [job, company] = await Promise.all([
-      this.db.job.findUnique({ where: { id: jobId }, select: { id: true } }),
-      this.db.company.findUnique({
-        where: { id: companyId },
-        select: { id: true },
-      }),
-    ]);
-
-    if (!job) throw new NotFoundException(`Job with id ${jobId} not found`);
-    if (!company) {
-      throw new NotFoundException(`Company with id ${companyId} not found`);
-    }
-  }
-
   async findByCandidateAndJob(candidateId: string, jobId: string) {
     return this.db.application.findFirst({
       where: { candidateId, jobId },
       select: { id: true, status: true, appliedAt: true },
     });
+  }
+
+  async getApplication(recruiterCompanyId: string, applicationId: string) {
+    if (!isUUID(applicationId)) {
+      throw new BadRequestException('applicationId must be a valid UUID');
+    }
+
+    const raw = await this.db.application.findUnique({
+      where: { id: applicationId, companyId: recruiterCompanyId },
+      select: applicationDetailSelect,
+    }); 
+
+    if (!raw) {
+      throw new NotFoundException('Application not found');
+    }
+
+    if (raw.companyId !== recruiterCompanyId) {
+      throw new ForbiddenException(
+        'You do not have access to this application',
+      );
+    }
+
+    // Resolve processing statuses
+    const getTaskStatus = (taskType: ProcessingTaskType) =>
+      raw.processingTasks.find((t) => t.taskType === taskType)?.status ?? null;
+
+    const analysis = raw.analysis[0] ?? null;
+
+    return {
+      application: {
+        id: raw.id,
+        status: raw.status,
+        source: raw.source,
+        matchScore: raw.matchScore,
+        rankPosition: raw.rankPosition,
+        isAutoShortlisted: raw.isAutoShortlisted,
+        appliedAt: raw.appliedAt,
+        updatedAt: raw.updatedAt,
+      },
+      job: raw.job,
+      candidate: raw.candidate,
+      resume: raw.resume,
+      analysis: analysis
+        ? {
+            skillMatchScore: analysis.skillMatchScore,
+            experienceScore: analysis.experienceScore,
+            educationScore: analysis.educationScore,
+            overallScore: analysis.overallScore,
+            matchedSkills: analysis.matchedSkills,
+            missingSkills: analysis.missingSkills,
+            strengths: analysis.strengths,
+            weaknesses: analysis.weaknesses,
+            aiSummary: analysis.aiSummary,
+            recommendation: analysis.recommendation,
+            analyzedAt: analysis.analyzedAt,
+          }
+        : null,
+      processing: {
+        resumeParse: getTaskStatus('RESUME_PARSE'),
+        resumeAnalysis: getTaskStatus('RESUME_ANALYSIS'),
+      },
+    };
   }
 
   async findAllByJob(
@@ -383,5 +418,42 @@ export class ApplicationService {
       applications: accepted,
       errors: rejected,
     };
+  }
+
+  // Private Helpers
+  private normalizeText(value?: string | null): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  private normalizeEmail(value?: string): string | undefined {
+    const normalized = this.normalizeText(value);
+    return normalized ? normalized.toLowerCase() : undefined;
+  }
+
+  private buildFullName(firstName: string, lastName: string): string {
+    return [firstName.trim(), lastName.trim()].filter(Boolean).join(' ').trim();
+  }
+
+  private safeUpdate<T extends object>(data: T): Partial<T> {
+    return Object.fromEntries(
+      Object.entries(data).filter(([, value]) => value !== undefined),
+    ) as Partial<T>;
+  }
+
+  private async ensureJobAndCompanyExist(jobId: string, companyId: string) {
+    const [job, company] = await Promise.all([
+      this.db.job.findUnique({ where: { id: jobId }, select: { id: true } }),
+      this.db.company.findUnique({
+        where: { id: companyId },
+        select: { id: true },
+      }),
+    ]);
+
+    if (!job) throw new NotFoundException(`Job with id ${jobId} not found`);
+    if (!company) {
+      throw new NotFoundException(`Company with id ${companyId} not found`);
+    }
   }
 }

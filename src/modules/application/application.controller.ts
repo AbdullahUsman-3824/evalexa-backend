@@ -36,6 +36,15 @@ const ALLOWED_RESUME_MIME_TYPES = [
 export class ApplicationController {
   constructor(private readonly applicationService: ApplicationService) {}
 
+  @Get(':id')
+  @UseGuards(JwtAuthGuard, RecruiterRoleGuard)
+  getApplication(@User() user: JwtPayload, @Param('id') applicationId: string) {
+    if (!user.companyId) {
+      throw new BadRequestException('Recruiter must belong to a company');
+    }
+    return this.applicationService.getApplication(user.companyId, applicationId);
+  }
+
   // Apply with parsed data and a resume file
   @Post('apply')
   @HttpCode(HttpStatus.CREATED)
