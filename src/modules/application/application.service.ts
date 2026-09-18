@@ -24,7 +24,6 @@ import { DatabaseService } from '../../database/database.service';
 import { ResumeService } from '../resume/resume.service';
 import { UploadedResumeFileDto } from '../resume/dto/uploaded-resume-file.dto';
 import { ApplyWithParsedDto } from './dto/apply-with-parsed.dto';
-import { RankingService } from '../ranking/ranking.service';
 import { FindJobApplicationsQueryDto } from './dto/find-job-applications-query.dto';
 import { ApplicationProcessingProducer } from '../processing/producers/application-processing.producer';
 import type { Express } from 'express';
@@ -37,7 +36,6 @@ export class ApplicationService {
     private readonly candidateService: CandidateService,
     private readonly resumeService: ResumeService,
     private readonly db: DatabaseService,
-    private readonly rankingService: RankingService,
     private readonly applicationProcessingProducer: ApplicationProcessingProducer,
   ) {}
 
@@ -56,7 +54,7 @@ export class ApplicationService {
     const raw = await this.db.application.findUnique({
       where: { id: applicationId, companyId: recruiterCompanyId },
       select: applicationDetailSelect,
-    }); 
+    });
 
     if (!raw) {
       throw new NotFoundException('Application not found');
@@ -217,7 +215,6 @@ export class ApplicationService {
   ) {
     await this.ensureJobAndCompanyExist(dto.jobId, dto.companyId);
 
-    let resumeUrl: string | undefined;
     let result: {
       applicationId: string;
       candidateId: string;
@@ -225,6 +222,11 @@ export class ApplicationService {
       resumeUrl: string;
       status: ApplicationStatus;
     };
+
+    // Upload happens outside the transaction — DB connection is never
+    // held open waiting on Supabase storage.
+    const uploaded = await this.resumeService.uploadResumeFile(file);
+    const resumeUrl = uploaded.resumeUrl;
 
     try {
       result = await this.db.$transaction(async (tx) => {
@@ -256,11 +258,11 @@ export class ApplicationService {
           );
         }
 
-        // Single call — resume service handles upload + DB row internally.
-        const resume = await this.resumeService.attachResumeToCandidate(
+        const resume = await this.resumeService.createResumeRecord(
           {
-            file,
             candidateId: candidate.id,
+            resumeUrl: uploaded.resumeUrl,
+            fileName: uploaded.fileName,
             submitted: {
               personal,
               education: dto.education,
@@ -270,7 +272,6 @@ export class ApplicationService {
           },
           tx,
         );
-        resumeUrl = resume.resumeUrl;
 
         const application = await tx.application.create({
           data: {
@@ -295,19 +296,18 @@ export class ApplicationService {
     } catch (error) {
       console.error('Error during application submission:', error);
 
-      // Cleanup
+      // Transaction failed — resume was uploaded before it started, so
+      // clean it up here to avoid an orphaned file in storage.
       if (resumeUrl) {
         await this.resumeService.deleteStorageFile(resumeUrl).catch(() => {
           // best-effort
         });
       }
 
-      // Agar already HttpException hai to as-is rethrow karo
       if (error instanceof HttpException) {
         throw error;
       }
 
-      // Baaki unknown errors ko proper message ke saath BadRequest/InternalServerError banao
       const message =
         error instanceof Error
           ? error.message

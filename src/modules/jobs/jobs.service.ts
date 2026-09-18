@@ -1,10 +1,9 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { JobStatus, Prisma } from '@prisma/client';
+import { JobStatus, Prisma, PrismaClient } from '@prisma/client';
 import { publicJobSelect, jobSelect, jobListSelect } from './jobs.select';
 import { DatabaseService } from '../../database/database.service';
 import {
@@ -14,10 +13,14 @@ import {
 import { CreateJobDto } from './dto/create-job.dto';
 import { FindJobsQueryDto, JobSortBy } from './dto/find-jobs-query.dto';
 import { UpdateJobDto } from './dto/update-job.dto';
+import { JobDeadlineProcessor } from '../processing/processors/job-deadline.processor';
 
 @Injectable()
 export class JobsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly jobDeadlineProcessor: JobDeadlineProcessor,
+  ) {}
 
   private async resolveCompanyId(
     userId: string,
@@ -58,7 +61,7 @@ export class JobsService {
   }
 
   private async generateUniqueJobSlug(
-    transaction: Prisma.TransactionClient,
+    client: Prisma.TransactionClient | PrismaClient,
     title: string,
     companyName: string,
     excludeJobId?: string,
@@ -69,43 +72,58 @@ export class JobsService {
       maxLength,
     );
 
-    let counter = 0;
-    while (counter < 1000) {
-      const suffix = counter === 0 ? '' : `-${String(counter + 1)}`;
+    // Fast path: try the clean base slug first
+    const existing = await client.job.findUnique({
+      where: { slug: baseSlug },
+      select: { id: true },
+    });
+
+    if (!existing || existing.id === excludeJobId) {
+      return baseSlug;
+    }
+
+    // Collision – try numbered variants
+    for (let counter = 2; counter <= 1000; counter++) {
+      const suffix = `-${counter}`;
       const slug = `${baseSlug.slice(0, maxLength - suffix.length)}${suffix}`;
 
-      const existing = await transaction.job.findUnique({
+      const conflict = await client.job.findUnique({
         where: { slug },
         select: { id: true },
       });
 
-      if (!existing || existing.id === excludeJobId) {
+      if (!conflict || conflict.id === excludeJobId) {
         return slug;
       }
-
-      counter += 1;
     }
 
-    throw new ConflictException('Could not generate a unique job slug');
+    // Absolute last resort – still unique and within length limit
+    const fallback = `${baseSlug.slice(0, maxLength - 14)}-${Date.now()}`;
+    return fallback;
   }
 
-  private async ensureSkillsExist(skillIds: string[]) {
+  private async ensureSkillsExist(skillIds: string[]): Promise<void> {
+    if (skillIds.length === 0) return;
+
     const uniqueSkillIds = [...new Set(skillIds)];
-    const existingSkills = await this.db.skill.findMany({
+
+    // Single round-trip count is enough when we only care about existence
+    const count = await this.db.skill.count({
+      where: { id: { in: uniqueSkillIds } },
+    });
+
+    if (count === uniqueSkillIds.length) return;
+
+    // Only fetch the missing ones when we actually need the detailed error
+    const existing = await this.db.skill.findMany({
       where: { id: { in: uniqueSkillIds } },
       select: { id: true },
     });
 
-    const existingSkillIds = new Set(existingSkills.map((skill) => skill.id));
-    const missingSkillIds = uniqueSkillIds.filter(
-      (skillId) => !existingSkillIds.has(skillId),
-    );
+    const existingSet = new Set(existing.map((s) => s.id));
+    const missing = uniqueSkillIds.filter((id) => !existingSet.has(id));
 
-    if (missingSkillIds.length > 0) {
-      throw new BadRequestException(
-        `Unknown skill ids: ${missingSkillIds.join(', ')}`,
-      );
-    }
+    throw new BadRequestException(`Unknown skill ids: ${missing.join(', ')}`);
   }
 
   private validateSalaryRange(salaryMin: number, salaryMax: number) {
@@ -407,74 +425,86 @@ export class JobsService {
     companyId: string | null | undefined,
     dto: CreateJobDto,
   ) {
-    if (dto.salary.min && dto.salary.max) {
+    // 1. Validate salary early (no DB)
+    if (dto.salary?.min != null && dto.salary?.max != null) {
       this.validateSalaryRange(dto.salary.min, dto.salary.max);
     }
 
+    // 2. Resolve ownership + company outside the transaction
     const ownedCompanyId = await this.resolveCompanyId(userId, companyId);
 
-    return this.db.$transaction(async (transaction) => {
-      const company = await transaction.company.findUnique({
-        where: { id: ownedCompanyId },
-        select: { name: true },
-      });
+    const company = await this.db.company.findUnique({
+      where: { id: ownedCompanyId },
+      select: { name: true },
+    });
 
-      if (!company) {
-        throw new NotFoundException(
-          `Company with id ${ownedCompanyId} not found`,
-        );
-      }
-
-      const slug = await this.generateUniqueJobSlug(
-        transaction,
-        dto.title,
-        company.name,
+    if (!company) {
+      throw new NotFoundException(
+        `Company with id ${ownedCompanyId} not found`,
       );
+    }
 
-      await this.ensureSkillsExist(dto.skills.map((s) => s.skillId));
+    // 3. Ensure skills exist
+    const skillIds = dto.skills.map((s) => s.skillId);
+    await this.ensureSkillsExist(skillIds);
 
-      return transaction.job.create({
-        data: {
-          companyId: ownedCompanyId,
-          createdBy: userId,
-          title: dto.title,
-          slug,
-          department: dto.department,
-          description: dto.description,
-          jobType: dto.jobType,
-          experienceLevel: dto.experienceLevel,
-          educationLevel: dto.educationLevel,
-          salaryMin: dto.salary.min,
-          salaryMax: dto.salary.max,
-          salaryCurrency: dto.salary.currency,
-          salaryPeriod: dto.salary.period,
-          location: dto.location,
-          workModel: dto.workModel,
-          status: dto.status ?? JobStatus.DRAFT,
-          applicationDeadline: dto.applicationDeadline,
-          totalOpenings: dto.totalOpenings ?? 1,
-          aiConfig: {
-            create: {
-              enableRanking: dto.aiConfig?.enableRanking ?? true,
-              enableAutoShortlisting:
-                dto.aiConfig?.enableAutoShortlisting ?? true,
-              shortlistLimit: dto.aiConfig?.shortlistLimit ?? null,
-              minimumMatchScore: dto.aiConfig?.minimumMatchScore ?? null,
-              enableAiInterview: dto.aiConfig?.enableAiInterview ?? false,
-              interviewLimit: dto.aiConfig?.interviewLimit ?? null,
+    // 4. Generate slug outside the transaction when possible.
+    const slug = await this.generateUniqueJobSlug(
+      this.db,
+      dto.title,
+      company.name,
+    );
+
+    // 5. Short transaction
+    return this.db.$transaction(
+      async (tx) => {
+        return tx.job.create({
+          data: {
+            companyId: ownedCompanyId,
+            createdBy: userId,
+            title: dto.title,
+            slug,
+            department: dto.department,
+            description: dto.description,
+            jobType: dto.jobType,
+            experienceLevel: dto.experienceLevel,
+            educationLevel: dto.educationLevel,
+            salaryMin: dto.salary?.min,
+            salaryMax: dto.salary?.max,
+            salaryCurrency: dto.salary?.currency,
+            salaryPeriod: dto.salary?.period,
+            location: dto.location,
+            workModel: dto.workModel,
+            status: dto.status ?? JobStatus.DRAFT,
+            applicationDeadline: dto.applicationDeadline,
+            totalOpenings: dto.totalOpenings ?? 1,
+            aiConfig: {
+              create: {
+                enableRanking: dto.aiConfig?.enableRanking ?? true,
+                enableAutoShortlisting:
+                  dto.aiConfig?.enableAutoShortlisting ?? true,
+                shortlistLimit: dto.aiConfig?.shortlistLimit ?? null,
+                minimumMatchScore: dto.aiConfig?.minimumMatchScore ?? null,
+                enableAiInterview: dto.aiConfig?.enableAiInterview ?? false,
+                interviewLimit: dto.aiConfig?.interviewLimit ?? null,
+              },
+            },
+            jobSkills: {
+              create: dto.skills.map((skill) => ({
+                skillId: skill.skillId,
+                importance: skill.importance,
+                weight: skill.weight,
+              })),
             },
           },
-          jobSkills: {
-            create: dto.skills.map((skill) => ({
-              skillId: skill.skillId,
-              importance: skill.importance,
-              weight: skill.weight,
-            })),
-          },
-        },
-        select: jobSelect,
-      });
-    });
+          select: jobSelect,
+        });
+      },
+      {
+        maxWait: 5000,
+        timeout: 15000,
+      },
+    );
   }
 
   async findAll(

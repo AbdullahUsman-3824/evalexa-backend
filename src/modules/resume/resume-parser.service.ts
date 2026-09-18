@@ -137,6 +137,7 @@ export class ResumeParserService {
           'Resume parse error detail:',
           JSON.stringify(error.response?.data, null, 2),
         );
+        console.log('[DEBUG] raw error: ', error.toJSON());
       } else {
         console.log('Error parsing resume:', error);
       }

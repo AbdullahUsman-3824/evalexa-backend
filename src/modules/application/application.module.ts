@@ -7,6 +7,7 @@ import { ResumeModule } from '../resume/resume.module';
 import { UsersModule } from '../users/users.module';
 import { ApplicationController } from './application.controller';
 import { ApplicationService } from './application.service';
+import { ShortlistingService } from './shortlisting.service';
 import { RankingModule } from '../ranking/ranking.module';
 import { ProcessingModule } from '../processing/processing.module';
 
@@ -21,7 +22,7 @@ import { ProcessingModule } from '../processing/processing.module';
     ProcessingModule,
   ],
   controllers: [ApplicationController],
-  providers: [ApplicationService, RecruiterRoleGuard],
+  providers: [ApplicationService, RecruiterRoleGuard, ShortlistingService],
   exports: [ApplicationService],
 })
 export class ApplicationModule {}

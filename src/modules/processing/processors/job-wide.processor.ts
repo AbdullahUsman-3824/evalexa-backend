@@ -6,6 +6,8 @@ import { ProcessingTaskService } from '../services/processing-task.service';
 import { JobProcessingService } from '../services/job-processing.service';
 import { JobWideTaskJobData } from '../interfaces/job-data.interface';
 import { RankingService } from '../../ranking/ranking.service';
+import { DatabaseService } from '../../../database/database.service';
+import { ShortlistingService } from '../../application/shortlisting.service';
 
 @Processor(QUEUE_NAMES.JOB_PROCESSING, { concurrency: 5 })
 export class JobWideProcessor extends WorkerHost {
@@ -13,6 +15,8 @@ export class JobWideProcessor extends WorkerHost {
     private readonly taskService: ProcessingTaskService,
     private readonly jobProcessingService: JobProcessingService,
     private readonly rankingService: RankingService,
+    private readonly shortlistingService: ShortlistingService,
+    private readonly db: DatabaseService,
     @InjectQueue(QUEUE_NAMES.JOB_PROCESSING)
     private readonly jobQueue: Queue,
   ) {
@@ -63,6 +67,8 @@ export class JobWideProcessor extends WorkerHost {
     }
   }
 
+  // job-wide.processor.ts — runShortlisting replace
+
   private async runShortlisting(data: JobWideTaskJobData) {
     const { jobId, jobProcessingId } = data;
 
@@ -78,10 +84,35 @@ export class JobWideProcessor extends WorkerHost {
     await this.taskService.markRunning(task.id);
 
     try {
-      // TODO: replace with real shortlisting logic
-      // await this.shortlistingService.shortlistTopCandidates(jobId);
+      const job = await this.db.job.findUnique({
+        where: { id: jobId },
+        select: {
+          applicationDeadline: true,
+          status: true,
+          aiConfig: {
+            select: {
+              enableAutoShortlisting: true,
+              shortlistLimit: true,
+              minimumMatchScore: true,
+            },
+          },
+        },
+      });
 
-      await this.taskService.markCompleted(task.id);
+      const deadlinePassed =
+        job?.applicationDeadline != null &&
+        new Date(job.applicationDeadline) <= new Date();
+
+      const shouldAutoShortlist =
+        !!job?.aiConfig?.enableAutoShortlisting && deadlinePassed;
+
+      if (shouldAutoShortlist) {
+        await this.shortlistingService.runAutoShortlistForJob(jobId);
+        await this.taskService.markCompleted(task.id);
+      } else {
+        await this.taskService.markCompleted(task.id);
+      }
+
       await this.jobProcessingService.markJobWideComplete(jobId);
     } catch (error) {
       await this.taskService.markFailed(task.id, error);

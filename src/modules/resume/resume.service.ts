@@ -122,6 +122,56 @@ export class ResumeService {
     });
   }
 
+  async uploadResumeFile(file: UploadedResumeFileDto) {
+    const resumeUrl = await this.uploadToSupabase(file);
+
+    return {
+      resumeUrl,
+      fileName: file.originalname,
+    };
+  }
+
+  async createResumeRecord(
+    params: {
+      candidateId: string;
+      resumeUrl: string;
+      fileName: string;
+      submitted: SubmittedResumeData;
+    },
+    db: Db = this.db,
+  ) {
+    const { candidateId, resumeUrl, fileName, submitted } = params;
+
+    // extractedSkills stays as a flat string[] — it's metadata used for
+    // display/search only, not the ranking payload (that's parsedData.skills,
+    // which keeps the {name, category} shape end-to-end).
+    const extractedSkills = Array.from(
+      new Map(
+        (submitted.skills ?? [])
+          .map((skill) => this.normalizeText(skill.name))
+          .filter((name): name is string => Boolean(name))
+          .map((name) => [name.toLowerCase(), name] as const),
+      ).values(),
+    );
+    const extractedExperience = this.sumExperienceMonths(submitted.experience);
+    const extractedEducation =
+      this.normalizeText(submitted.education?.[0]?.degree) ?? null;
+
+    return db.resume.create({
+      data: {
+        candidateId,
+        resumeUrl,
+        fileName,
+        parsedData: submitted as unknown as object,
+        extractedSkills: extractedSkills as unknown as object,
+        extractedExperience,
+        extractedEducation,
+        isPrimary: false,
+      },
+    });
+  }
+
+
   /**
    * Bulk path: upload file + create Resume row with NO parsedData.
    * Parsing happens later in ResumeParseProcessor.

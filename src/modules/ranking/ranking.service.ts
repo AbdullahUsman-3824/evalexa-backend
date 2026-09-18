@@ -51,17 +51,85 @@ export class RankingService {
   }
 
   private buildResumePayload(parsedData: unknown): ResumeDataPayload {
-    // Verified: Resume.parsedData is stored as ParsedResumeData
-    // (resume-parser.service.ts), which matches FastAPI's ResumeData
-    // shape field-for-field. Direct pass-through, no remap needed.
-    return parsedData as ResumeDataPayload;
+    const data = parsedData as {
+      skills?: {
+        name?: string;
+        category?: string;
+      }[];
+
+      personal?: {
+        firstName?: string;
+        lastName?: string;
+        email?: string;
+        phone?: string;
+        address?: string;
+        headline?: string;
+      };
+
+      education?: {
+        degree?: string;
+        school?: string;
+        fieldOfStudy?: string;
+        startDate?: string;
+        endDate?: string;
+        grade?: string;
+      }[];
+
+      experience?: {
+        title?: string;
+        company?: string;
+        startDate?: string;
+        endDate?: string;
+        isCurrent?: boolean;
+        durationMonths?: number | null;
+        description?: string;
+        technologies?: string[];
+      }[];
+
+      projects?: unknown[];
+      certifications?: unknown[];
+      interests?: string[];
+      meta?: Record<string, unknown>;
+    };
+
+    const fullName = [data.personal?.firstName, data.personal?.lastName]
+      .filter(Boolean)
+      .join(' ');
+
+    return {
+      basics: {
+        fullName: fullName || undefined,
+        email: data.personal?.email,
+        phone: data.personal?.phone,
+        location: data.personal?.address,
+        headline: data.personal?.headline,
+      },
+
+      skills: data.skills ?? [],
+
+      education: (data.education ?? []).map((education) => ({
+        degree: education.degree,
+        field: education.fieldOfStudy,
+        institution: education.school,
+        startDate: education.startDate,
+        endDate: education.endDate,
+        grade: education.grade,
+      })),
+
+      experience: data.experience ?? [],
+
+      projects: data.projects,
+      certifications: data.certifications,
+      interests: data.interests,
+      meta: data.meta,
+    };
   }
 
   private computeOverallScore(fieldScores: FieldScores): number {
     return (
-      RANKING_WEIGHTS.skills * fieldScores.skills_score +
-      RANKING_WEIGHTS.experience * fieldScores.experience_score +
-      RANKING_WEIGHTS.education * fieldScores.education_score
+      RANKING_WEIGHTS.skills * (fieldScores.skills_score ?? 0) +
+      RANKING_WEIGHTS.experience * (fieldScores.experience_score ?? 0) +
+      RANKING_WEIGHTS.education * (fieldScores.education_score ?? 0)
     );
   }
 
@@ -175,9 +243,11 @@ export class RankingService {
         data: {
           applicationId,
           jobId: application.jobId,
-          skillMatchScore: Math.round(field_scores.skills_score * 100),
-          experienceScore: Math.round(field_scores.experience_score * 100),
-          educationScore: Math.round(field_scores.education_score * 100),
+          skillMatchScore: Math.round((field_scores.skills_score ?? 0) * 100),
+          experienceScore: Math.round(
+            (field_scores.experience_score ?? 0) * 100,
+          ),
+          educationScore: Math.round((field_scores.education_score ?? 0) * 100),
           overallScore: matchScorePercent,
           matchedSkills: field_scores.matched_skills,
           missingSkills: field_scores.missing_skills,

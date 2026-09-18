@@ -25,6 +25,9 @@ import { RecruiterRoleGuard } from '../company/guards/recruiter-role.guard';
 import { ApplyWithParsedDto } from './dto/apply-with-parsed.dto';
 import { FindJobApplicationsQueryDto } from './dto/find-job-applications-query.dto';
 import { ApplicationService } from './application.service';
+import { ShortlistTopDto } from './dto/shortlist-top.dto';
+import { UnshortlistDto } from './dto/unshortlist.dto';
+import { ShortlistingService } from './shortlisting.service';
 
 const ALLOWED_RESUME_MIME_TYPES = [
   'application/pdf',
@@ -34,18 +37,26 @@ const ALLOWED_RESUME_MIME_TYPES = [
 
 @Controller('application')
 export class ApplicationController {
-  constructor(private readonly applicationService: ApplicationService) {}
+  constructor(
+    private readonly applicationService: ApplicationService,
+    private readonly shortlistingService: ShortlistingService,
+  ) {}
 
+  // GET application/:id
   @Get(':id')
   @UseGuards(JwtAuthGuard, RecruiterRoleGuard)
   getApplication(@User() user: JwtPayload, @Param('id') applicationId: string) {
     if (!user.companyId) {
       throw new BadRequestException('Recruiter must belong to a company');
     }
-    return this.applicationService.getApplication(user.companyId, applicationId);
+    return this.applicationService.getApplication(
+      user.companyId,
+      applicationId,
+    );
   }
 
   // Apply with parsed data and a resume file
+  // POST /application/apply
   @Post('apply')
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(
@@ -97,6 +108,7 @@ export class ApplicationController {
   }
 
   // Get all applications for a job
+  // GET /application/jobs/:jobId
   @Get('jobs/:jobId')
   @UseGuards(JwtAuthGuard, RecruiterRoleGuard)
   findAllByJob(
@@ -108,6 +120,7 @@ export class ApplicationController {
   }
 
   // Upload multiple resumes for a job (bulk import)
+  // POST /application/job/:jobId/bulk
   @UseGuards(JwtAuthGuard, RecruiterRoleGuard)
   @Post('job/:jobId/bulk')
   @HttpCode(HttpStatus.ACCEPTED)
@@ -145,5 +158,48 @@ export class ApplicationController {
       user.companyId,
       files,
     );
+  }
+
+  // Shortlisting
+  // POST /application/jobs/:jobId/shortlist-top
+  @Post('jobs/:jobId/shortlist-top')
+  @UseGuards(JwtAuthGuard, RecruiterRoleGuard)
+  @HttpCode(HttpStatus.OK)
+  shortlistTop(
+    @User() user: JwtPayload,
+    @Param('jobId') jobId: string,
+    @Body() dto: ShortlistTopDto,
+  ) {
+    if (!user.companyId) {
+      throw new BadRequestException('Recruiter must belong to a company');
+    }
+    return this.shortlistingService.shortlistTopN(jobId, dto.count, {
+      auto: false,
+      actorUserId: user.sub,
+    });
+  }
+
+  // POST /application/:id/shortlist
+  @Post(':id/shortlist')
+  @UseGuards(JwtAuthGuard, RecruiterRoleGuard)
+  shortlistOne(@User() user: JwtPayload, @Param('id') id: string) {
+    return this.shortlistingService.shortlistOne(id, user.companyId!, {
+      auto: false,
+      actorUserId: user.sub,
+    });
+  }
+
+  // POST /application/:id/unshortlist
+  @Post(':id/unshortlist')
+  @UseGuards(JwtAuthGuard, RecruiterRoleGuard)
+  unshortlist(
+    @User() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: UnshortlistDto,
+  ) {
+    return this.shortlistingService.unshortlistOne(id, user.companyId!, {
+      actorUserId: user.sub,
+      reason: dto.reason,
+    });
   }
 }

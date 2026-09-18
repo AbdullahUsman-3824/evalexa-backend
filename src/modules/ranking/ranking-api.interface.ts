@@ -52,9 +52,9 @@ export interface RankApiRequest {
 }
 
 export interface FieldScores {
-  skills_score: number;
-  experience_score: number;
-  education_score: number;
+  skills_score: number | null;
+  experience_score: number | null;
+  education_score: number | null;
   matched_skills: string[];
   missing_skills: string[];
   ai_summary: string | null;
