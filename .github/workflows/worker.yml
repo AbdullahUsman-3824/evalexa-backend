@@ -25,7 +25,6 @@ jobs:
 
       - run: npm ci
       - run: npm run build
-      - run: find dist -name "*.js" | sort 
       - run: npm run start:worker
         env:
           REDIS_URL: ${{ secrets.REDIS_URL }}
