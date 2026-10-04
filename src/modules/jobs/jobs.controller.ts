@@ -60,4 +60,11 @@ export class JobsController {
   ) {
     return this.jobsService.update(user.sub, user.companyId, id, dto);
   }
+
+  // Manually close a job: sets status=CLOSED, cancels the Bull deadline job,
+  // and triggers auto shortlisting if enabled.
+  @Post(':id/close')
+  closeJob(@User() user: JwtPayload, @Param('id') id: string) {
+    return this.jobsService.closeJob(user.sub, user.companyId, id);
+  }
 }

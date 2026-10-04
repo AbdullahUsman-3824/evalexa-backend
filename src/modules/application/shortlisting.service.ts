@@ -14,8 +14,11 @@ export type ShortlistOptions = {
   auto?: boolean;
   /** Override config; if omitted uses JobAiConfig.minimumMatchScore */
   minScore?: number | null;
-  /** Recruiter user id; null for system */
-  actorUserId?: string | null;
+  /**
+   * Required for manual shortlist (recruiter).
+   * Null/undefined for system auto path.
+   */
+  companyId?: string | null;
 };
 
 export type ShortlistTopResult = {
@@ -24,6 +27,13 @@ export type ShortlistTopResult = {
   shortlisted: number;
   applicationIds: string[];
   skippedReason?: string;
+};
+
+export type BulkShortlistResult = {
+  shortlistedCount: number;
+  failedCount: number;
+  failedIds: string[];
+  message: string;
 };
 
 @Injectable()
@@ -36,9 +46,9 @@ export class ShortlistingService {
 
   /**
    * Shortlist top N APPLIED applications for a job by rankPosition.
-   * - Only status = APPLIED
-   * - Optional minimumMatchScore filter (qualified only; may return < N)
-   * - auto=true → isAutoShortlisted = true
+   * Optional minimumMatchScore filter may return fewer than N.
+   * auto=true → isAutoShortlisted = true.
+   * Manual path requires companyId and verifies job ownership.
    */
   async shortlistTopN(
     jobId: string,
@@ -50,20 +60,27 @@ export class ShortlistingService {
       throw new BadRequestException('count must be a positive integer');
     }
 
+    // Manual: must own the job. Auto: system path, no company check.
+    if (!opts.auto) {
+      if (!opts.companyId) {
+        throw new BadRequestException(
+          'companyId is required for manual shortlist',
+        );
+      }
+      this.assertUuid(opts.companyId, 'companyId');
+      await this.assertJobOwnedByCompany(jobId, opts.companyId);
+    }
+
     const job = await this.db.job.findUnique({
       where: { id: jobId },
       select: {
         id: true,
-        status: true,
         aiConfig: {
           select: {
             enableAutoShortlisting: true,
             shortlistLimit: true,
             minimumMatchScore: true,
           },
-        },
-        jobProcessing: {
-          select: { status: true, currentTask: true },
         },
       },
     });
@@ -72,7 +89,6 @@ export class ShortlistingService {
       throw new NotFoundException(`Job ${jobId} not found`);
     }
 
-    // Auto path: ranking must be ready (wait rule)
     if (opts.auto && !(await this.isRankingReady(jobId))) {
       return {
         jobId,
@@ -118,10 +134,10 @@ export class ShortlistingService {
     const ids = candidates.map((c) => c.id);
     const isAuto = !!opts.auto;
 
-    await this.db.application.updateMany({
+    const { count: updatedCount } = await this.db.application.updateMany({
       where: {
         id: { in: ids },
-        status: ApplicationStatus.APPLIED, // race-safe
+        status: ApplicationStatus.APPLIED,
       },
       data: {
         status: ApplicationStatus.SHORTLISTED,
@@ -129,26 +145,38 @@ export class ShortlistingService {
       },
     });
 
-    this.logger.log(
-      `Shortlisted ${ids.length}/${count} for job ${jobId} (auto=${isAuto})`,
-    );
+    const shortlistedApps =
+      updatedCount === ids.length
+        ? ids
+        : (
+            await this.db.application.findMany({
+              where: {
+                id: { in: ids },
+                status: ApplicationStatus.SHORTLISTED,
+              },
+              select: { id: true },
+            })
+          ).map((a) => a.id);
 
-    // Optional: write status history here later
-    // await this.recordStatusChanges(ids, APPLIED → SHORTLISTED, opts)
+    this.logger.log(
+      `Shortlisted ${shortlistedApps.length}/${count} for job ${jobId} (auto=${isAuto})`,
+    );
 
     return {
       jobId,
       requested: count,
-      shortlisted: ids.length,
-      applicationIds: ids,
+      shortlisted: shortlistedApps.length,
+      applicationIds: shortlistedApps,
     };
   }
 
   /**
-   * Auto shortlist driven by JobAiConfig after deadline close.
-   * Uses shortlistLimit; no-ops if auto disabled or limit missing.
+   * Auto shortlist after deadline close using JobAiConfig.shortlistLimit.
+   * Internal / cron only — do not expose as a public HTTP route.
    */
   async runAutoShortlistForJob(jobId: string): Promise<ShortlistTopResult> {
+    this.assertUuid(jobId, 'jobId');
+
     const job = await this.db.job.findUnique({
       where: { id: jobId },
       select: {
@@ -191,56 +219,76 @@ export class ShortlistingService {
     return this.shortlistTopN(jobId, limit, {
       auto: true,
       minScore: job.aiConfig.minimumMatchScore,
-      actorUserId: null,
+      companyId: null,
     });
   }
 
   // ─── Single application ─────────────────────────────────────────────
 
-  async shortlistOne(
-    applicationId: string,
-    companyId: string,
-    opts: ShortlistOptions = {},
-  ) {
+  /**
+   * Shortlist one APPLIED application. Idempotent if already SHORTLISTED.
+   */
+  async shortlistOne(applicationId: string, companyId: string) {
     this.assertUuid(applicationId, 'applicationId');
+    this.assertUuid(companyId, 'companyId');
+
     const app = await this.findOwnedApplication(applicationId, companyId);
 
     if (app.status === ApplicationStatus.SHORTLISTED) {
-      return app; // idempotent
+      return {
+        success: true,
+        message: 'Candidate is already shortlisted.',
+      };
     }
 
     if (app.status !== ApplicationStatus.APPLIED) {
-      throw new BadRequestException(
-        `Cannot shortlist application in status ${app.status}`,
-      );
+      throw new BadRequestException({
+        success: false,
+        message: `Cannot shortlist application in status ${app.status}`,
+        error: 'INVALID_STATUS_TRANSITION',
+      });
     }
 
-    return this.db.application.update({
-      where: { id: applicationId },
+    const { count } = await this.db.application.updateMany({
+      where: {
+        id: applicationId,
+        status: ApplicationStatus.APPLIED,
+        companyId,
+      },
       data: {
         status: ApplicationStatus.SHORTLISTED,
-        isAutoShortlisted: !!opts.auto,
-      },
-      select: {
-        id: true,
-        status: true,
-        isAutoShortlisted: true,
-        rankPosition: true,
-        matchScore: true,
+        isAutoShortlisted: false,
       },
     });
+
+    if (count === 0) {
+      const current = await this.findOwnedApplication(applicationId, companyId);
+      if (current.status === ApplicationStatus.SHORTLISTED) {
+        return {
+          success: true,
+          message: 'Candidate is already shortlisted.',
+        };
+      }
+      throw new BadRequestException({
+        success: false,
+        message: `Cannot shortlist application in status ${current.status}`,
+        error: 'INVALID_STATUS_TRANSITION',
+      });
+    }
+
+    return {
+      success: true,
+      message: 'Candidate shortlisted successfully.',
+    };
   }
 
   /**
-   * Unshortlist → back to APPLIED.
-   * isAutoShortlisted is PRESERVED (fairness / audit history).
+   * Unshortlist → APPLIED. isAutoShortlisted is preserved for audit.
    */
-  async unshortlistOne(
-    applicationId: string,
-    companyId: string,
-    opts: { actorUserId?: string | null; reason?: string } = {},
-  ) {
+  async unshortlistOne(applicationId: string, companyId: string) {
     this.assertUuid(applicationId, 'applicationId');
+    this.assertUuid(companyId, 'companyId');
+
     const app = await this.findOwnedApplication(applicationId, companyId);
 
     if (app.status !== ApplicationStatus.SHORTLISTED) {
@@ -249,52 +297,177 @@ export class ShortlistingService {
       );
     }
 
-    const updated = await this.db.application.update({
-      where: { id: applicationId },
+    const { count } = await this.db.application.updateMany({
+      where: {
+        id: applicationId,
+        status: ApplicationStatus.SHORTLISTED,
+        companyId,
+      },
       data: {
         status: ApplicationStatus.APPLIED,
-        // isAutoShortlisted intentionally NOT cleared
+      },
+    });
+
+    if (count === 0) {
+      const current = await this.findOwnedApplication(applicationId, companyId);
+      throw new BadRequestException(
+        `Only SHORTLISTED applications can be unshortlisted (current: ${current.status})`,
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Candidate unshortlisted successfully.',
+    };
+  }
+
+  // ─── Bulk ───────────────────────────────────────────────────────────
+
+  /**
+   * Bulk shortlist selected APPLIED applications for a job.
+   * Already SHORTLISTED are treated as success (idempotent).
+   * Skips invalid / not-owned / wrong-job / wrong status.
+   * Max 50 ids.
+   */
+  async bulkShortlist(
+    jobId: string,
+    applicationIds: string[],
+    companyId: string,
+  ): Promise<BulkShortlistResult> {
+    this.assertUuid(jobId, 'jobId');
+    this.assertUuid(companyId, 'companyId');
+
+    if (!Array.isArray(applicationIds) || applicationIds.length === 0) {
+      throw new BadRequestException(
+        'applicationIds must be a non-empty array.',
+      );
+    }
+    if (applicationIds.length > 50) {
+      throw new BadRequestException(
+        'applicationIds must contain at most 50 items.',
+      );
+    }
+
+    const uniqueIds = [...new Set(applicationIds)];
+    for (const id of uniqueIds) {
+      this.assertUuid(id, 'applicationId');
+    }
+
+    await this.assertJobOwnedByCompany(jobId, companyId);
+
+    const apps = await this.db.application.findMany({
+      where: {
+        id: { in: uniqueIds },
+        jobId,
+        companyId,
       },
       select: {
         id: true,
         status: true,
-        isAutoShortlisted: true,
-        rankPosition: true,
-        matchScore: true,
       },
     });
 
+    const foundIds = new Set(apps.map((a) => a.id));
+    const failedIds: string[] = [];
+    const toShortlist: string[] = [];
+
+    for (const id of uniqueIds) {
+      if (!foundIds.has(id)) {
+        failedIds.push(id);
+      }
+    }
+
+    for (const app of apps) {
+      if (app.status === ApplicationStatus.SHORTLISTED) {
+        continue;
+      }
+      if (app.status === ApplicationStatus.APPLIED) {
+        toShortlist.push(app.id);
+      } else {
+        failedIds.push(app.id);
+      }
+    }
+
+    let shortlistedCount = 0;
+    if (toShortlist.length > 0) {
+      const { count } = await this.db.application.updateMany({
+        where: {
+          id: { in: toShortlist },
+          status: ApplicationStatus.APPLIED,
+          jobId,
+          companyId,
+        },
+        data: {
+          status: ApplicationStatus.SHORTLISTED,
+          isAutoShortlisted: false,
+        },
+      });
+      shortlistedCount = count;
+
+      if (shortlistedCount < toShortlist.length) {
+        const actuallyUpdated = await this.db.application.findMany({
+          where: {
+            id: { in: toShortlist },
+            status: ApplicationStatus.SHORTLISTED,
+          },
+          select: { id: true },
+        });
+        const updatedSet = new Set(actuallyUpdated.map((a) => a.id));
+        for (const id of toShortlist) {
+          if (!updatedSet.has(id)) {
+            failedIds.push(id);
+          }
+        }
+        shortlistedCount = actuallyUpdated.length;
+      }
+    }
+
+    const alreadyShortlisted = apps.filter(
+      (a) => a.status === ApplicationStatus.SHORTLISTED,
+    ).length;
+    const effectiveSuccess = shortlistedCount + alreadyShortlisted;
+    const failedCount = failedIds.length;
+    const totalRequested = uniqueIds.length;
+
+    let message: string;
+    if (failedCount === 0) {
+      message = `${effectiveSuccess} candidate${effectiveSuccess === 1 ? '' : 's'} shortlisted successfully.`;
+    } else if (effectiveSuccess === 0) {
+      message = `0 of ${totalRequested} candidates shortlisted.`;
+    } else {
+      message = `${effectiveSuccess} of ${totalRequested} candidates shortlisted. ${failedCount} failed.`;
+    }
+
     this.logger.log(
-      `Unshortlisted application ${applicationId} by ${opts.actorUserId ?? 'system'}` +
-        (opts.reason ? ` reason=${opts.reason}` : '') +
-        (app.isAutoShortlisted ? ' [was auto-shortlisted]' : ''),
+      `Bulk shortlist job=${jobId}: shortlisted=${shortlistedCount}, already=${alreadyShortlisted}, failed=${failedCount}`,
     );
 
-    return updated;
+    return {
+      shortlistedCount: effectiveSuccess,
+      failedCount,
+      failedIds: [...new Set(failedIds)],
+      message,
+    };
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────
 
+  /**
+   * Ranking is ready when processing is COMPLETED or at least one rank exists.
+   */
   async isRankingReady(jobId: string): Promise<boolean> {
     const jp = await this.db.jobProcessing.findUnique({
       where: { jobId },
       select: { status: true },
     });
-    if (!jp) return false;
 
-    // Pipeline finished ranking (COMPLETED), OR at least some ranks exist
-    if (jp.status === ProcessingStatus.COMPLETED) return true;
+    if (jp?.status === ProcessingStatus.COMPLETED) {
+      return true;
+    }
 
-    const rankedCount = await this.db.application.count({
-      where: { jobId, rankPosition: { not: null } },
-    });
-    return rankedCount > 0;
+    return this.hasRanks(jobId);
   }
 
-  /**
-   * Stronger check: at least one application has rankPosition set.
-   * Prefer this for auto shortlist "wait" rule.
-   */
   async hasRanks(jobId: string): Promise<boolean> {
     const ranked = await this.db.application.count({
       where: { jobId, rankPosition: { not: null } },
@@ -324,6 +497,16 @@ export class ShortlistingService {
       );
     }
     return app;
+  }
+
+  private async assertJobOwnedByCompany(jobId: string, companyId: string) {
+    const job = await this.db.job.findFirst({
+      where: { id: jobId, companyId },
+      select: { id: true },
+    });
+    if (!job) {
+      throw new NotFoundException(`Job ${jobId} not found`);
+    }
   }
 
   private assertUuid(value: string, field: string) {

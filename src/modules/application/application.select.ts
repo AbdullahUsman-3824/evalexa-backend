@@ -136,3 +136,36 @@ export const jobApplicationsListSelect = {
     },
   },
 };
+
+export const shortlistCardSelect = () => {
+  return {
+    id: true,
+    candidateId: true,
+    status: true,
+    matchScore: true,
+    isAutoShortlisted: true,
+    updatedAt: true,
+    appliedAt: true,
+    candidate: {
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+      },
+    },
+    resume: {
+      select: {
+        extractedSkills: true,
+        extractedExperience: true,
+      },
+    },
+    analysis: {
+      where: { isLatest: true },
+      take: 1,
+      select: {
+        matchedSkills: true,
+        overallScore: true,
+      },
+    },
+  } satisfies Prisma.ApplicationSelect;
+};

@@ -5,6 +5,7 @@ import { JobProcessingService } from './services/job-processing.service';
 import { ProcessingTaskService } from './services/processing-task.service';
 import { ShortlistingService } from '../application/shortlisting.service';
 import { ApplicationProcessingProducer } from './producers/application-processing.producer';
+import { JobDeadlineProducer } from './producers/job-deadline.producer';
 import { ResumeAnalysisProcessor } from './processors/resume-analysis.processor';
 import { DatabaseModule } from '../../database/database.module';
 import { RankingModule } from '../ranking/ranking.module';
@@ -24,6 +25,7 @@ import { RecruiterRoleGuard } from '../company/guards/recruiter-role.guard';
     BullModule.registerQueue(
       { name: QUEUE_NAMES.APPLICATION_PROCESSING },
       { name: QUEUE_NAMES.JOB_PROCESSING },
+      { name: QUEUE_NAMES.SCHEDULED },
     ),
     DatabaseModule,
     RankingModule,
@@ -36,6 +38,7 @@ import { RecruiterRoleGuard } from '../company/guards/recruiter-role.guard';
     JobProcessingService,
     ProcessingTaskService,
     ApplicationProcessingProducer,
+    JobDeadlineProducer,
     ResumeAnalysisProcessor,
     JobWideProcessor,
     ShortlistingService,
@@ -46,6 +49,7 @@ import { RecruiterRoleGuard } from '../company/guards/recruiter-role.guard';
   controllers: [ProcessingController],
   exports: [
     ApplicationProcessingProducer,
+    JobDeadlineProducer,
     JobProcessingService,
     JobDeadlineProcessor,
   ],

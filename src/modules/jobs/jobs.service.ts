@@ -13,13 +13,15 @@ import {
 import { CreateJobDto } from './dto/create-job.dto';
 import { FindJobsQueryDto, JobSortBy } from './dto/find-jobs-query.dto';
 import { UpdateJobDto } from './dto/update-job.dto';
-import { JobDeadlineProcessor } from '../processing/processors/job-deadline.processor';
+import { JobDeadlineProducer } from '../processing/producers/job-deadline.producer';
+import { ShortlistingService } from '../application/shortlisting.service';
 
 @Injectable()
 export class JobsService {
   constructor(
     private readonly db: DatabaseService,
-    private readonly jobDeadlineProcessor: JobDeadlineProcessor,
+    private readonly jobDeadlineProducer: JobDeadlineProducer,
+    private readonly shortlistingService: ShortlistingService,
   ) {}
 
   private async resolveCompanyId(
@@ -456,7 +458,7 @@ export class JobsService {
     );
 
     // 5. Short transaction
-    return this.db.$transaction(
+    const job = await this.db.$transaction(
       async (tx) => {
         return tx.job.create({
           data: {
@@ -505,6 +507,16 @@ export class JobsService {
         timeout: 15000,
       },
     );
+
+    // 6. Schedule deadline job if the job is OPEN and has a deadline
+    if (job.status === JobStatus.OPEN && job.applicationDeadline) {
+      await this.jobDeadlineProducer.scheduleJobDeadline(
+        job.id,
+        new Date(job.applicationDeadline),
+      );
+    }
+
+    return job;
   }
 
   async findAll(
@@ -637,6 +649,8 @@ export class JobsService {
       select: {
         id: true,
         title: true,
+        status: true,
+        applicationDeadline: true,
         salaryMin: true,
         salaryMax: true,
         company: {
@@ -661,13 +675,24 @@ export class JobsService {
       throw new NotFoundException(`Job with id ${id} not found`);
     }
 
+    // Prevent re-opening a closed job via a plain update
+    if (
+      currentJob.status === JobStatus.CLOSED &&
+      dto.status &&
+      dto.status !== JobStatus.CLOSED
+    ) {
+      throw new BadRequestException(
+        'Cannot change status of a closed job. Use the reopen endpoint instead.',
+      );
+    }
+
     const nextSalaryMin = dto.salary?.min ?? currentJob.salaryMin;
     const nextSalaryMax = dto.salary?.max ?? currentJob.salaryMax;
     this.validateSalaryRange(Number(nextSalaryMin), Number(nextSalaryMax));
 
     const aiConfig = this.mergeAiConfig(currentJob.aiConfig, dto.aiConfig);
 
-    return this.db.$transaction(async (transaction) => {
+    const updatedJob = await this.db.$transaction(async (transaction) => {
       const slug = dto.title
         ? await this.generateUniqueJobSlug(
             transaction,
@@ -702,7 +727,7 @@ export class JobsService {
           ...(dto.location ? { location: dto.location } : {}),
           ...(dto.workModel ? { workModel: dto.workModel } : {}),
           ...(dto.status ? { status: dto.status } : {}),
-          ...(dto.applicationDeadline
+          ...(dto.applicationDeadline !== undefined
             ? { applicationDeadline: dto.applicationDeadline }
             : {}),
           ...(dto.totalOpenings !== undefined
@@ -739,7 +764,7 @@ export class JobsService {
         }
       }
 
-      const updatedJob = await transaction.job.findFirst({
+      const result = await transaction.job.findFirst({
         where: {
           id,
           companyId: ownedCompanyId,
@@ -747,11 +772,74 @@ export class JobsService {
         select: jobSelect,
       });
 
-      if (!updatedJob) {
+      if (!result) {
         throw new NotFoundException(`Job with id ${id} not found`);
       }
 
-      return updatedJob;
+      return result;
     });
+
+    // ── Post-transaction: sync the Bull deadline job ──────────────────
+    const nextStatus = updatedJob.status;
+    const nextDeadline = updatedJob.applicationDeadline
+      ? new Date(updatedJob.applicationDeadline)
+      : null;
+
+    if (nextStatus === JobStatus.CLOSED) {
+      // Manual close via status field — cancel any pending deadline job
+      await this.jobDeadlineProducer.cancelJobDeadline(id);
+    } else if (nextStatus === JobStatus.OPEN) {
+      // (Re)schedule whenever deadline or status changed to OPEN
+      const deadlineChanged =
+        dto.applicationDeadline !== undefined ||
+        (dto.status === JobStatus.OPEN &&
+          currentJob.status !== JobStatus.OPEN);
+
+      if (deadlineChanged) {
+        await this.jobDeadlineProducer.scheduleJobDeadline(id, nextDeadline);
+      }
+    }
+
+    return updatedJob;
+  }
+
+  async closeJob(
+    userId: string,
+    companyId: string | null | undefined,
+    id: string,
+  ) {
+    const ownedCompanyId = await this.resolveCompanyId(userId, companyId);
+
+    const job = await this.db.job.findFirst({
+      where: { id, companyId: ownedCompanyId },
+      select: { id: true, status: true },
+    });
+
+    if (!job) {
+      throw new NotFoundException(`Job with id ${id} not found`);
+    }
+
+    if (job.status === JobStatus.CLOSED) {
+      throw new BadRequestException('Job is already closed');
+    }
+
+    // 1. Persist CLOSED status
+    await this.db.job.update({
+      where: { id },
+      data: { status: JobStatus.CLOSED },
+    });
+
+    // 2. Cancel any pending Bull deadline job
+    await this.jobDeadlineProducer.cancelJobDeadline(id);
+
+    // 3. Trigger auto shortlisting (honours enableAutoShortlisting + ranking-ready wait)
+    const shortlistResult =
+      await this.shortlistingService.runAutoShortlistForJob(id);
+
+    return {
+      id,
+      status: JobStatus.CLOSED,
+      shortlist: shortlistResult,
+    };
   }
 }
