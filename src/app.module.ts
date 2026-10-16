@@ -18,6 +18,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { SkillsModule } from './modules/skills/skills.module';
 import { RankingModule } from './modules/ranking/ranking.module';
 import { ProcessingModule } from './modules/processing/processing.module';
+import { QStashModule } from './qstash/qstash.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { ProcessingModule } from './modules/processing/processing.module';
     SkillsModule,
     RankingModule,
     ProcessingModule,
+    QStashModule,
   ],
   controllers: [AppController],
   providers: [AppService],
