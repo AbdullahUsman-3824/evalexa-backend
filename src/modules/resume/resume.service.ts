@@ -174,7 +174,6 @@ export class ResumeService {
 
   /**
    * Bulk path: upload file + create Resume row with NO parsedData.
-   * Parsing happens later in ResumeParseProcessor.
    */
   async uploadRawResumeForCandidate(
     params: {

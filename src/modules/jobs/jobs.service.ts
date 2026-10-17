@@ -792,8 +792,7 @@ export class JobsService {
       // (Re)schedule whenever deadline or status changed to OPEN
       const deadlineChanged =
         dto.applicationDeadline !== undefined ||
-        (dto.status === JobStatus.OPEN &&
-          currentJob.status !== JobStatus.OPEN);
+        (dto.status === JobStatus.OPEN && currentJob.status !== JobStatus.OPEN);
 
       if (deadlineChanged) {
         await this.jobDeadlineProducer.scheduleJobDeadline(id, nextDeadline);
@@ -829,10 +828,28 @@ export class JobsService {
       data: { status: JobStatus.CLOSED },
     });
 
-    // 2. Cancel any pending Bull deadline job
+    // 2. Cancel any pending deadline job (local BullMQ; QStash logs limitation)
     await this.jobDeadlineProducer.cancelJobDeadline(id);
 
-    // 3. Trigger auto shortlisting (honours enableAutoShortlisting + ranking-ready wait)
+    // 3. Auto shortlist — same readiness rules as deadline path.
+    //    shortlistTopN / runAutoShortlistForJob already returns skippedReason
+    //    when ranking is not ready or auto is disabled (no infinite retry here
+    //    because this is a synchronous recruiter action).
+    const rankingReady = await this.shortlistingService.isRankingReady(id);
+    if (!rankingReady) {
+      return {
+        id,
+        status: JobStatus.CLOSED,
+        shortlist: {
+          jobId: id,
+          requested: 0,
+          shortlisted: 0,
+          applicationIds: [],
+          skippedReason: 'RANKING_NOT_READY',
+        },
+      };
+    }
+
     const shortlistResult =
       await this.shortlistingService.runAutoShortlistForJob(id);
 

@@ -21,15 +21,26 @@ export class QStashService {
     @InjectQueue(QUEUE_NAMES.SCHEDULED)
     private readonly scheduledQueue: Queue,
   ) {
-    // Local detection
-    this.isLocal =
-      process.env.NODE_ENV === 'development' || !process.env.VERCEL;
+    // Prefer explicit flag; fall back to NODE_ENV / VERCEL detection
+    const forceQStash = process.env.USE_QSTASH === 'true';
+    const forceLocal = process.env.USE_QSTASH === 'false';
 
-    this.backendUrl = process.env.BACKEND_URL || '';
+    this.isLocal = forceLocal
+      ? true
+      : forceQStash
+        ? false
+        : process.env.NODE_ENV === 'development' || !process.env.VERCEL;
+
+    this.backendUrl = (process.env.BACKEND_URL || '').replace(/\/+$/, '');
 
     if (!this.isLocal) {
       if (!process.env.QSTASH_TOKEN) {
         throw new Error('QSTASH_TOKEN is required in production');
+      }
+      if (!this.backendUrl) {
+        throw new Error(
+          'BACKEND_URL is required in production (QStash publish target)',
+        );
       }
       this.client = new Client({
         token: process.env.QSTASH_TOKEN,
@@ -50,6 +61,10 @@ export class QStashService {
   ) {
     if (!this.client) {
       throw new Error('QStash client not initialized');
+    }
+
+    if (!this.backendUrl) {
+      throw new Error('BACKEND_URL is not configured');
     }
 
     const options: any = {
@@ -154,7 +169,7 @@ export class QStashService {
         { jobId },
         {
           jobId: bullJobId,
-          delay: Math.max(delayInSeconds, 0) * 1000, // BullMQ milliseconds leta hai
+          delay: Math.max(delayInSeconds, 0) * 1000, // BullMQ milliseconds
           attempts: 8,
           backoff: { type: 'fixed', delay: 15 * 60 * 1000 },
           removeOnComplete: true,
@@ -164,6 +179,8 @@ export class QStashService {
     }
 
     // Production → QStash
+    // Note: full cancel requires storing messageId (Phase 2).
+    // We still publish; cancelJobDeadline logs a warning in prod.
     return this.publishToQStash(
       '/worker/close-job',
       { jobId },
@@ -183,10 +200,13 @@ export class QStashService {
       return;
     }
 
-    // QStash mein cancel ke liye messageId chahiye hota hai.
-    // Abhi ke liye sirf log kar rahe hain.
+    // QStash cancel requires the messageId returned at publish time.
+    // Without a persisted messageId we cannot cancel reliably.
+    // Documented limitation — avoid re-scheduling the same job when possible.
     this.logger.warn(
-      `[QStash] Cancel requested for job ${jobId}. (Full cancel support Phase 2+ mein aayega)`,
+      `[QStash] Cancel requested for job ${jobId}. ` +
+        `MessageId is not stored yet — delayed close-job may still fire. ` +
+        `(Store messageId in DB for full cancel support.)`,
     );
   }
 }

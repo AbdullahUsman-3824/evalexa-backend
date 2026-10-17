@@ -10,11 +10,10 @@ import { WorkerController } from './worker.controller';
 import { ApplicationProcessingProducer } from './producers/application-processing.producer';
 import { JobDeadlineProducer } from './producers/job-deadline.producer';
 
-// Processors
+// Processors — single processor per queue to avoid dual-worker races
 import { ResumeAnalysisProcessor } from './processors/resume-analysis.processor';
 import { JobWideProcessor } from './processors/job-wide.processor';
 import { JobDeadlineProcessor } from './processors/job-deadline.processor';
-import { ResumeParseProcessor } from './processors/resume-parse.processor';
 
 // Services
 import { JobProcessingService } from './services/job-processing.service';
@@ -57,7 +56,6 @@ import { RecruiterRoleGuard } from '../company/guards/recruiter-role.guard';
     JobWideProcessor,
     ShortlistingService,
     RecruiterRoleGuard,
-    ResumeParseProcessor,
     JobDeadlineProcessor,
     ProcessingExecutorService,
   ],

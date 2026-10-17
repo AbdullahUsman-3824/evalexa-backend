@@ -15,34 +15,76 @@ export class JobProcessingService {
     });
   }
 
-  // Call this whenever a new application starts being processed.
-  // - Always increments totalApplications
-  // - PENDING → RUNNING only once (startedAt set once)
-  // - COMPLETED/FAILED + late app → reopen to RUNNING
+  /**
+   * Atomic register of a new application against the job's processing row.
+   * - Always increments totalApplications
+   * - PENDING → RUNNING (sets startedAt once)
+   * - COMPLETED / FAILED + late app → reopen to RUNNING and clear terminal fields
+   *
+   * Uses a single SQL statement to avoid the previous get-then-update race.
+   */
   async registerNewApplication(jobId: string) {
-    const existing = await this.getOrCreate(jobId);
+    const rows = await this.db.$queryRaw<
+      {
+        id: string;
+        job_id: string;
+        status: string;
+        total_applications: number;
+        processed_applications: number;
+        failed_applications: number;
+      }[]
+    >`
+      INSERT INTO job_processing (
+        id, job_id, status, total_applications,
+        processed_applications, failed_applications,
+        started_at, created_at, updated_at
+      )
+      VALUES (
+        gen_random_uuid(), ${jobId}::uuid, 'RUNNING', 1,
+        0, 0, NOW(), NOW(), NOW()
+      )
+      ON CONFLICT (job_id) DO UPDATE SET
+        total_applications = job_processing.total_applications + 1,
+        status = CASE
+          WHEN job_processing.status IN ('PENDING', 'COMPLETED', 'FAILED')
+            THEN 'RUNNING'::"ProcessingStatus"
+          ELSE job_processing.status
+        END,
+        started_at = CASE
+          WHEN job_processing.status = 'PENDING' THEN NOW()
+          ELSE job_processing.started_at
+        END,
+        completed_at = CASE
+          WHEN job_processing.status IN ('COMPLETED', 'FAILED') THEN NULL
+          ELSE job_processing.completed_at
+        END,
+        current_task = CASE
+          WHEN job_processing.status IN ('COMPLETED', 'FAILED') THEN NULL
+          ELSE job_processing.current_task
+        END,
+        last_error = CASE
+          WHEN job_processing.status IN ('COMPLETED', 'FAILED') THEN NULL
+          ELSE job_processing.last_error
+        END,
+        updated_at = NOW()
+      RETURNING
+        id, job_id, status,
+        total_applications, processed_applications, failed_applications
+    `;
 
-    const data: Prisma.JobProcessingUpdateInput = {
-      totalApplications: { increment: 1 },
-    };
-
-    if (existing.status === ProcessingStatus.PENDING) {
-      data.status = ProcessingStatus.RUNNING;
-      data.startedAt = new Date();
-    } else if (
-      existing.status === ProcessingStatus.COMPLETED ||
-      existing.status === ProcessingStatus.FAILED
-    ) {
-      data.status = ProcessingStatus.RUNNING;
-      data.completedAt = null;
-      data.currentTask = null;
-      data.lastError = Prisma.DbNull;
+    const row = rows[0];
+    if (!row) {
+      throw new Error(`Failed to register application for job ${jobId}`);
     }
 
-    return this.db.jobProcessing.update({
-      where: { jobId },
-      data,
-    });
+    return {
+      id: row.id,
+      jobId: row.job_id,
+      status: row.status as ProcessingStatus,
+      totalApplications: Number(row.total_applications),
+      processedApplications: Number(row.processed_applications),
+      failedApplications: Number(row.failed_applications),
+    };
   }
 
   // Marks which stage is currently active for this job.
@@ -115,12 +157,12 @@ export class JobProcessingService {
   // Call when retrying a previously-failed application.
   async undoFailedApplication(jobId: string) {
     await this.db.$executeRaw`
-    UPDATE job_processing
-    SET
-      failed_applications = GREATEST(failed_applications - 1, 0),
-      updated_at = NOW()
-    WHERE job_id = ${jobId}::uuid
-  `;
+      UPDATE job_processing
+      SET
+        failed_applications = GREATEST(failed_applications - 1, 0),
+        updated_at = NOW()
+      WHERE job_id = ${jobId}::uuid
+    `;
   }
 
   // All applications failed resume analysis — skip ranking/shortlisting.

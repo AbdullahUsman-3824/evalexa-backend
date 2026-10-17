@@ -55,8 +55,16 @@ export class WorkerController {
         .json({ error: 'Invalid signature' });
     }
 
-    const result = await this.executor.runResumeParse(body);
-    return res.status(HttpStatus.OK).json(result);
+    try {
+      const result = await this.executor.runResumeParse(body);
+      return res.status(HttpStatus.OK).json(result);
+    } catch (error) {
+      // Transient errors → 500 so QStash retries
+      this.logger.warn(`resume-parse failed`, error);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        error: error instanceof Error ? error.message : 'Failed',
+      });
+    }
   }
 
   @Post('resume-analysis')
@@ -71,8 +79,15 @@ export class WorkerController {
         .json({ error: 'Invalid signature' });
     }
 
-    const result = await this.executor.runResumeAnalysis(body);
-    return res.status(HttpStatus.OK).json(result);
+    try {
+      const result = await this.executor.runResumeAnalysis(body);
+      return res.status(HttpStatus.OK).json(result);
+    } catch (error) {
+      this.logger.warn(`resume-analysis failed`, error);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        error: error instanceof Error ? error.message : 'Failed',
+      });
+    }
   }
 
   @Post('ranking')
@@ -87,8 +102,38 @@ export class WorkerController {
         .json({ error: 'Invalid signature' });
     }
 
-    const result = await this.executor.runRanking(body);
-    return res.status(HttpStatus.OK).json(result);
+    try {
+      const result = await this.executor.runRanking(body);
+      return res.status(HttpStatus.OK).json(result);
+    } catch (error) {
+      this.logger.warn(`ranking failed`, error);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        error: error instanceof Error ? error.message : 'Failed',
+      });
+    }
+  }
+
+  @Post('shortlisting')
+  async shortlisting(
+    @Req() req: Request,
+    @Body() body: JobWideTaskJobData,
+    @Res() res: Response,
+  ) {
+    if (!(await this.verify(req))) {
+      return res
+        .status(HttpStatus.UNAUTHORIZED)
+        .json({ error: 'Invalid signature' });
+    }
+
+    try {
+      const result = await this.executor.runShortlisting(body);
+      return res.status(HttpStatus.OK).json(result);
+    } catch (error) {
+      this.logger.warn(`shortlisting failed`, error);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        error: error instanceof Error ? error.message : 'Failed',
+      });
+    }
   }
 
   @Post('close-job')

@@ -31,6 +31,45 @@ export class ProcessingExecutorService {
     private readonly qstash: QStashService,
   ) {}
 
+  /**
+   * Transient errors should be retried by BullMQ / QStash.
+   * Permanent business errors should not.
+   */
+  private isTransientError(error: unknown): boolean {
+    if (!(error instanceof Error)) return true;
+
+    const msg = error.message.toLowerCase();
+
+    // Permanent – do not retry
+    if (
+      msg.includes('not found') ||
+      msg.includes('not yet parsed') ||
+      msg.includes('application or resume file not found')
+    ) {
+      return false;
+    }
+
+    // Network / HTTP 5xx style – retry
+    const anyErr = error as any;
+    if (
+      anyErr.code &&
+      [
+        'ECONNRESET',
+        'ETIMEDOUT',
+        'ECONNREFUSED',
+        'ENOTFOUND',
+        'EAI_AGAIN',
+      ].includes(anyErr.code)
+    ) {
+      return true;
+    }
+    if (anyErr.response?.status >= 500) return true;
+    if (anyErr.status >= 500) return true;
+
+    // Default: treat unexpected errors as transient so queue can retry
+    return true;
+  }
+
   // ==================== RESUME PARSE ====================
   async runResumeParse(data: ApplicationTaskJobData) {
     const { applicationId, jobId, jobProcessingId, taskId } = data;
@@ -104,6 +143,12 @@ export class ProcessingExecutorService {
 
       await this.taskService.markFailed(taskId, error);
 
+      // Transient → rethrow so BullMQ / QStash retries (do NOT touch counters yet)
+      if (this.isTransientError(error)) {
+        throw error;
+      }
+
+      // Permanent failure → count it and possibly trigger ranking
       const { allDone, processed } =
         await this.jobProcessingService.markApplicationDone(jobId, false);
 
@@ -130,47 +175,74 @@ export class ProcessingExecutorService {
 
     await this.taskService.markRunning(taskId);
 
-    let success = true;
-
     try {
       const result = await this.rankingService.scoreApplication(applicationId);
       if (!result) {
         throw new Error('Application not found or resume not yet parsed');
       }
       await this.taskService.markCompleted(taskId);
+
+      const {
+        allDone,
+        processed,
+        jobProcessingId: jpId,
+      } = await this.jobProcessingService.markApplicationDone(jobId, true);
+
+      if (allDone) {
+        const claimed = await this.jobProcessingService.claimRanking(jobId);
+        if (claimed) {
+          if (processed === 0) {
+            await this.jobProcessingService.markJobWideNoSuccessfulApplications(
+              jobId,
+            );
+          } else {
+            await this.qstash.addRanking({
+              jobId,
+              jobProcessingId: jpId || jobProcessingId,
+            });
+          }
+        }
+      }
+
+      return { success: true };
     } catch (error) {
-      success = false;
       this.logger.error(
         `Resume analysis failed for ${applicationId}: ${
           error instanceof Error ? error.message : error
         }`,
       );
       await this.taskService.markFailed(taskId, error);
-    }
 
-    const {
-      allDone,
-      processed,
-      jobProcessingId: jpId,
-    } = await this.jobProcessingService.markApplicationDone(jobId, success);
+      // Transient → rethrow so queue retries (counters untouched)
+      if (this.isTransientError(error)) {
+        throw error;
+      }
 
-    if (allDone) {
-      const claimed = await this.jobProcessingService.claimRanking(jobId);
-      if (claimed) {
-        if (processed === 0) {
-          await this.jobProcessingService.markJobWideNoSuccessfulApplications(
-            jobId,
-          );
-        } else {
-          await this.qstash.addRanking({
-            jobId,
-            jobProcessingId: jpId || jobProcessingId,
-          });
+      // Permanent failure
+      const {
+        allDone,
+        processed,
+        jobProcessingId: jpId,
+      } = await this.jobProcessingService.markApplicationDone(jobId, false);
+
+      if (allDone) {
+        const claimed = await this.jobProcessingService.claimRanking(jobId);
+        if (claimed) {
+          if (processed === 0) {
+            await this.jobProcessingService.markJobWideNoSuccessfulApplications(
+              jobId,
+            );
+          } else {
+            await this.qstash.addRanking({
+              jobId,
+              jobProcessingId: jpId || jobProcessingId,
+            });
+          }
         }
       }
-    }
 
-    return { success };
+      return { success: false };
+    }
   }
 
   // ==================== RANKING ====================
@@ -190,7 +262,10 @@ export class ProcessingExecutorService {
 
     try {
       await this.rankingService.recalculateRanksForJob(jobId);
-      await this.taskService.markCompleted(task.id);    
+      await this.taskService.markCompleted(task.id);
+
+      // P0-1 fix: mark job-wide processing COMPLETED after ranking
+      await this.jobProcessingService.markJobWideComplete(jobId);
 
       return { success: true };
     } catch (error) {
@@ -239,13 +314,21 @@ export class ProcessingExecutorService {
       return { closed: true, shortlisted: 0, reason: 'AUTO_DISABLED' };
     }
 
-    const rankingReady = await this.isRankingReady(
-      jobId,
-      row.jobProcessing?.status,
-    );
+    const processingStatus = row.jobProcessing?.status;
+
+    // if processing already FAILED (e.g. all apps failed analysis),
+    // do NOT throw RANKING_NOT_READY — that caused infinite QStash retries.
+    if (processingStatus === ProcessingStatus.FAILED) {
+      this.logger.warn(
+        `Job ${jobId}: processing FAILED — skipping auto shortlist`,
+      );
+      return { closed: true, shortlisted: 0, reason: 'PROCESSING_FAILED' };
+    }
+
+    const rankingReady = await this.isRankingReady(jobId, processingStatus);
 
     if (!rankingReady) {
-      // QStash retries handle karega
+      // Still in progress or not yet ranked → let QStash / BullMQ retry
       throw new Error('RANKING_NOT_READY');
     }
 
@@ -317,6 +400,8 @@ export class ProcessingExecutorService {
     processingStatus?: ProcessingStatus,
   ): Promise<boolean> {
     if (processingStatus === ProcessingStatus.COMPLETED) return true;
+    // FAILED is handled by caller (runCloseJob) — treat as not ready here
+    if (processingStatus === ProcessingStatus.FAILED) return false;
 
     const ranked = await this.db.application.count({
       where: { jobId, rankPosition: { not: null } },

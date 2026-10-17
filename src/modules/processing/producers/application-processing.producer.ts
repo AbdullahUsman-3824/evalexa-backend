@@ -1,9 +1,5 @@
 import { NotFoundException, Injectable, Logger } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
-import { HttpService } from '@nestjs/axios';
-import { Queue } from 'bullmq';
 import { ProcessingStatus, ProcessingTaskType } from '@prisma/client';
-import { QUEUE_NAMES } from '../queues/queue-names';
 import { JobProcessingService } from '../services/job-processing.service';
 import { ProcessingTaskService } from '../services/processing-task.service';
 import { DatabaseService } from '../../../database/database.service';
@@ -14,12 +10,9 @@ export class ApplicationProcessingProducer {
   private readonly logger = new Logger(ApplicationProcessingProducer.name);
 
   constructor(
-    @InjectQueue(QUEUE_NAMES.APPLICATION_PROCESSING)
-    private readonly appQueue: Queue,
     private readonly jobProcessingService: JobProcessingService,
     private readonly taskService: ProcessingTaskService,
     private readonly db: DatabaseService,
-    private readonly httpService: HttpService,
     private readonly qstash: QStashService,
   ) {}
 
