@@ -4,7 +4,7 @@ model JobProcessing {
     jobId String @unique @map("job_id") @db.Uuid
 
     status      ProcessingStatus    @default(PENDING)
-    currentTask ProcessingTaskType?
+    currentTask ProcessingTaskType? @map("current_task")
 
     totalApplications     Int @default(0) @map("total_applications")
     processedApplications Int @default(0) @map("processed_applications")
