@@ -291,15 +291,18 @@ export class ApplicationService {
       throw new InternalServerErrorException(message);
     }
 
-    this.applicationProcessingProducer
-      .enqueueApplicationProcessing(result.applicationId, dto.jobId)
-      .catch((error) => {
-        this.logger.error(
-          `Failed to enqueue processing for application ${result.applicationId}: ${
-            error instanceof Error ? error.message : error
-          }`,
-        );
-      });
+    try {
+      await this.applicationProcessingProducer.enqueueApplicationProcessing(
+        result.applicationId,
+        dto.jobId,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to enqueue processing for application ${result.applicationId}: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+    }
 
     return result;
   }
