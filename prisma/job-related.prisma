@@ -47,8 +47,8 @@ model Job {
   aiConfig       JobAiConfig?
   resumeAnalyses ResumeAnalysis[]
 
-  jobProcessing JobProcessing? 
-  jobSkills JobSkill[]
+  jobProcessing JobProcessing?
+  jobSkills     JobSkill[]
 
   @@index([companyId])
   @@index([createdBy])
@@ -79,32 +79,32 @@ model JobSkill {
 }
 
 model JobAiConfig {
-  id                      String    @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  jobId                   String    @unique @db.Uuid
+  jobId String @unique @db.Uuid
 
   // Resume Ranking
-  enableRanking           Boolean   @default(true)
+  enableRanking Boolean @default(true)
 
   // Automatically shortlist top candidates
-  enableAutoShortlisting  Boolean   @default(true)
+  enableAutoShortlisting Boolean @default(true)
 
   // Number of candidates to shortlist
-  shortlistLimit          Int?
+  shortlistLimit Int?
 
   // Minimum AI score required
-  minimumMatchScore       Float?
+  minimumMatchScore Float?
 
   // AI Interview
-  enableAiInterview       Boolean   @default(false)
+  enableAiInterview Boolean @default(false)
 
   // Invite only top N candidates
-  interviewLimit          Int?
+  interviewLimit Int?
 
-  createdAt               DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt               DateTime  @updatedAt @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
 
-  job                     Job       @relation( fields: [jobId],references: [id],onDelete: Cascade)
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@map("job_ai_config")
 }

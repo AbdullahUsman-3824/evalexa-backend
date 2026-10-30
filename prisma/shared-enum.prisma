@@ -3,53 +3,53 @@
 // ================================
 
 enum JobStatus {
-    DRAFT
-    OPEN
-    CLOSED
-    ARCHIVED
+  DRAFT
+  OPEN
+  CLOSED
+  ARCHIVED
 }
 
 enum JobType {
-    FULL_TIME
-    PART_TIME
-    CONTRACT
-    INTERN
-    FREELANCE
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+  FREELANCE
 }
 
 enum WorkModel {
-    ONSITE
-    REMOTE
-    HYBRID
+  ONSITE
+  REMOTE
+  HYBRID
 }
 
 enum ExperienceLevel {
-    INTERN
-    JUNIOR
-    MID
-    SENIOR
-    LEAD
+  INTERN
+  JUNIOR
+  MID
+  SENIOR
+  LEAD
 }
 
 enum EducationLevel {
-    HIGH_SCHOOL
-    DIPLOMA
-    ASSOCIATE
-    BACHELOR
-    MASTER
-    PHD
-    ANY
+  HIGH_SCHOOL
+  DIPLOMA
+  ASSOCIATE
+  BACHELOR
+  MASTER
+  PHD
+  ANY
 }
 
 enum SalaryPeriod {
-    HOURLY
-    MONTHLY
-    YEARLY
+  HOURLY
+  MONTHLY
+  YEARLY
 }
 
 enum SkillImportance {
-    REQUIRED
-    PREFERRED
+  REQUIRED
+  PREFERRED
 }
 
 // ================================
@@ -57,21 +57,21 @@ enum SkillImportance {
 // ================================
 
 enum ApplicationSource {
-    FORM_FILL
-    RESUME_UPLOAD
-    REFERRAL
-    IMPORT
-    API
+  FORM_FILL
+  RESUME_UPLOAD
+  REFERRAL
+  IMPORT
+  API
 }
 
 enum ApplicationStatus {
-    APPLIED
-    SHORTLISTED
-    INTERVIEW
-    OFFER
-    HIRED
-    REJECTED
-    WITHDRAWN
+  APPLIED
+  SHORTLISTED
+  INTERVIEW
+  OFFER
+  HIRED
+  REJECTED
+  WITHDRAWN
 }
 
 // ================================
@@ -79,26 +79,26 @@ enum ApplicationStatus {
 // ================================
 
 enum ProcessingStatus {
-    PENDING
-    RUNNING
-    COMPLETED
-    FAILED
-    CANCELLED
-    SKIPPED
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  SKIPPED
 }
 
 enum ProcessingTaskType {
-    RESUME_PARSE
-    RESUME_ANALYSIS
-    RANKING
-    SHORTLISTING
-    AI_INTERVIEW
-    EMAIL_NOTIFICATION
+  RESUME_PARSE
+  RESUME_ANALYSIS
+  RANKING
+  SHORTLISTING
+  AI_INTERVIEW
+  EMAIL_NOTIFICATION
 }
 
 enum TaskScope {
-    APPLICATION
-    JOB
+  APPLICATION
+  JOB
 }
 
 // ================================
@@ -106,15 +106,73 @@ enum TaskScope {
 // ================================
 
 enum InterviewStatus {
-    PENDING
-    IN_PROGRESS
-    COMPLETED
-    CANCELLED
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+  CANCELLED
 }
 
-enum InterviewType {
-    AI
-    LIVE
+enum TranscriptionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  PARTIALLY_COMPLETED
+  FAILED
+}
+
+enum AnswerTranscriptionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  EMPTY_AUDIO
+  UNINTELLIGIBLE
+}
+
+enum EvaluationStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  PARTIALLY_COMPLETED
+  FAILED
+}
+
+enum InterviewQuestionCategory {
+  CONCEPTUAL
+  SCENARIO_PRACTICAL
+}
+
+enum InterviewRecommendation {
+  STRONGLY_RECOMMENDED
+  RECOMMENDED
+  NEUTRAL
+  NOT_RECOMMENDED
+  STRONGLY_NOT_RECOMMENDED
+}
+
+enum RecordingType {
+  AUDIO
+  VIDEO
+  AUDIO_VIDEO
+}
+
+enum RecordingUploadStatus {
+  PENDING
+  UPLOADED
+  FAILED
+}
+
+enum InvitationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum ExtensionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 // ================================
@@ -122,9 +180,9 @@ enum InterviewType {
 // ================================
 
 enum OfferStatus {
-    DRAFT
-    SENT
-    ACCEPTED
-    DECLINED
-    EXPIRED
+  DRAFT
+  SENT
+  ACCEPTED
+  DECLINED
+  EXPIRED
 }

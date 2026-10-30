@@ -1,29 +1,285 @@
+// ==========================================
+// INTERVIEW
+// ==========================================
+
 model Interview {
-    id String @id @default(uuid()) @db.Uuid
+  id            String @id @default(uuid()) @db.Uuid
+  applicationId String @db.Uuid
 
-    applicationId String @map("application_id") @db.Uuid
+  // Interview configuration
+  language String
 
-    type InterviewType
+  // Interview lifecycle
+  status      InterviewStatus @default(PENDING)
+  startedAt   DateTime?       @db.Timestamptz(6)
+  submittedAt DateTime?       @db.Timestamptz(6)
+  completedAt DateTime?       @db.Timestamptz(6)
 
-    status InterviewStatus @default(PENDING)
+  // Transcription
+  transcriptionStatus TranscriptionStatus @default(PENDING)
 
-    overallScore Float? @map("overall_score")
+  // Evaluation
+  evaluationStatus EvaluationStatus @default(PENDING)
 
-    recommendation String?
+  overallScore      Decimal? @db.Decimal(8, 2)
+  overallMaxScore   Decimal? @db.Decimal(8, 2)
+  overallPercentage Decimal? @db.Decimal(6, 2)
 
-    feedback String?
+  overallFeedback String? @db.Text
 
-    startedAt DateTime? @map("started_at") @db.Timestamptz(6)
+  recommendation InterviewRecommendation?
 
-    completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  evaluatedAt DateTime? @db.Timestamptz(6)
 
-    createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  // Relations
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
-    updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  questions InterviewQuestion[]
 
-    application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  invitation InterviewInvitation?
 
-    @@index([applicationId])
-    @@index([status])
-    @@map("interviews")
+  extensionRequests InterviewExtensionRequest[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([applicationId])
+  @@index([status])
+  @@index([transcriptionStatus])
+  @@index([evaluationStatus])
+}
+
+// ==========================================
+// INTERVIEW QUESTIONS
+// ==========================================
+
+model InterviewQuestion {
+  id          String @id @default(uuid()) @db.Uuid
+  interviewId String @db.Uuid
+
+  order           Int
+  category        InterviewQuestionCategory
+  questionText    String                    @db.Text
+  referenceAnswer String                    @db.Text
+
+  maxScore Decimal @db.Decimal(8, 2)
+
+  // Relations
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  criteria InterviewQuestionCriterion[]
+
+  answer InterviewAnswer?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([interviewId, order])
+  @@index([interviewId])
+  @@index([category])
+}
+
+// ==========================================
+// QUESTION EVALUATION RUBRIC
+// ==========================================
+
+model InterviewQuestionCriterion {
+  id         String @id @default(uuid()) @db.Uuid
+  questionId String @db.Uuid
+
+  criterion   String
+  description String  @db.Text
+  maxScore    Decimal @db.Decimal(8, 2)
+
+  // Relations
+  question InterviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  results InterviewCriterionResult[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([questionId])
+}
+
+// ==========================================
+// INTERVIEW INVITATION
+// ==========================================
+
+model InterviewInvitation {
+  id          String @id @default(uuid()) @db.Uuid
+  interviewId String @unique @db.Uuid
+
+  // Secure invitation token (store hash only)
+  tokenHash String @unique
+
+  // OTP verification (store hash only)
+  otpHash      String?
+  otpExpiresAt DateTime? @db.Timestamptz(6)
+  otpAttempts  Int       @default(0)
+  verifiedAt   DateTime? @db.Timestamptz(6)
+
+  // Invitation expiry
+  expiresAt DateTime @db.Timestamptz(6)
+
+  // Email delivery
+  deliveryStatus InvitationDeliveryStatus @default(PENDING)
+  sentAt         DateTime?                @db.Timestamptz(6)
+
+  // Relations
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([expiresAt])
+  @@index([deliveryStatus])
+}
+
+// ==========================================
+// INTERVIEW ANSWER
+// ==========================================
+
+model InterviewAnswer {
+  id         String @id @default(uuid()) @db.Uuid
+  questionId String @unique @db.Uuid
+
+  // Transcribed candidate response
+  answerText String? @db.Text
+
+  transcriptionStatus AnswerTranscriptionStatus @default(PENDING)
+
+  transcriptionError String? @db.Text
+
+  answeredAt      DateTime? @db.Timestamptz(6)
+  durationSeconds Int?
+
+  // Relations
+  question InterviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  recordings InterviewRecording[]
+
+  evaluation InterviewAnswerEvaluation?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([transcriptionStatus])
+}
+
+// ==========================================
+// INTERVIEW RECORDINGS
+// ==========================================
+
+model InterviewRecording {
+  id       String @id @default(uuid()) @db.Uuid
+  answerId String @db.Uuid
+
+  type RecordingType
+
+  // Object storage information
+  storageKey String @unique
+
+  mimeType  String
+  sizeBytes BigInt
+
+  durationSeconds Int?
+
+  uploadStatus RecordingUploadStatus @default(PENDING)
+
+  // Optional file integrity verification
+  checksum String?
+
+  // Relations
+  answer InterviewAnswer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([answerId])
+  @@index([uploadStatus])
+}
+
+// ==========================================
+// ANSWER EVALUATION
+// ==========================================
+
+model InterviewAnswerEvaluation {
+  id       String @id @default(uuid()) @db.Uuid
+  answerId String @unique @db.Uuid
+
+  status EvaluationStatus @default(PENDING)
+
+  score      Decimal? @db.Decimal(8, 2)
+  maxScore   Decimal? @db.Decimal(8, 2)
+  percentage Decimal? @db.Decimal(6, 2)
+
+  strengths    String[] @default([])
+  improvements String[] @default([])
+
+  feedback String? @db.Text
+
+  evaluatedAt DateTime? @db.Timestamptz(6)
+
+  // Relations
+  answer InterviewAnswer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+
+  criteria InterviewCriterionResult[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([status])
+}
+
+// ==========================================
+// INDIVIDUAL CRITERION RESULTS
+// ==========================================
+
+model InterviewCriterionResult {
+  id           String @id @default(uuid()) @db.Uuid
+  evaluationId String @db.Uuid
+  criterionId  String @db.Uuid
+
+  score    Decimal @db.Decimal(8, 2)
+  maxScore Decimal @db.Decimal(8, 2)
+
+  reason String @db.Text
+
+  // Relations
+  evaluation InterviewAnswerEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  criterion InterviewQuestionCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([evaluationId, criterionId])
+  @@index([criterionId])
+}
+
+// ==========================================
+// INTERVIEW EXTENSION REQUEST
+// ==========================================
+
+model InterviewExtensionRequest {
+  id          String @id @default(uuid()) @db.Uuid
+  interviewId String @db.Uuid
+
+  reason String @db.Text
+
+  status ExtensionRequestStatus @default(PENDING)
+
+  requestedAt DateTime @default(now()) @db.Timestamptz(6)
+
+  reviewedAt DateTime? @db.Timestamptz(6)
+
+  // Recruiter who reviewed the request
+  reviewedById String? @db.Uuid
+
+  decisionNote String? @db.Text
+
+  // Relations
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  reviewedBy User? @relation("ExtensionRequestReviewer", fields: [reviewedById], references: [id])
+
+  @@index([interviewId, status])
+  @@index([reviewedById])
 }
