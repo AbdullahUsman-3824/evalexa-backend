@@ -107,4 +107,42 @@ export class MailService {
       );
     }
   }
+
+  async sendInterviewInvitation(
+    email: string,
+    interviewLink: string,
+    expiresAt: Date,
+    companyName: string,
+    jobTitle: string,
+  ): Promise<void> {
+    this.ensureSmtpConfiguration();
+
+    try {
+      await this.transporter.sendMail({
+        from: this.mailFrom,
+        to: email,
+        subject: `Interview invitation from ${companyName} - ${jobTitle}`,
+        text: [
+          `Congratulations! You have been selected for an interview with ${companyName} for the ${jobTitle} position.`,
+          '',
+          `Start your interview here: ${interviewLink}`,
+          '',
+          `This link is valid until ${expiresAt.toISOString()} (3 days).`,
+          '',
+          'Powered by Evalexa',
+        ].join('\n'),
+      });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown SMTP error';
+
+      this.logger.error(
+        `Failed to send interview invitation to ${email}: ${message}`,
+      );
+
+      throw new InternalServerErrorException(
+        `Failed to send interview invitation: ${message}`,
+      );
+    }
+  }
 }

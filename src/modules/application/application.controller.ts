@@ -210,6 +210,19 @@ export class ApplicationController {
     );
   }
 
+  // POST /application/jobs/:jobId/finalize-shortlist
+  @Post('jobs/:jobId/finalize-shortlist')
+  @HttpCode(HttpStatus.OK)
+  finalizeShortlist(
+    @User() user: JwtPayload,
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+  ) {
+    return this.applicationService.finalizeShortlist(
+      this.requireCompanyId(user),
+      jobId,
+    );
+  }
+
   // POST /application/:id/shortlist
   @Post(':id/shortlist')
   @HttpCode(HttpStatus.OK)
