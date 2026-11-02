@@ -53,7 +53,6 @@ export class MailService {
     }
 
     if (missing.length > 0) {
-
       throw new ServiceUnavailableException(
         `Email service is not configured. Missing: ${missing.join(', ')}`,
       );
@@ -142,6 +141,30 @@ export class MailService {
 
       throw new InternalServerErrorException(
         `Failed to send interview invitation: ${message}`,
+      );
+    }
+  }
+
+  async sendInterviewOtp(email: string, otp: string): Promise<void> {
+    this.ensureSmtpConfiguration();
+
+    try {
+      await this.transporter.sendMail({
+        from: this.mailFrom,
+        to: email,
+        subject: 'Your interview verification code - Evalexa',
+        text: `Your verification code is ${otp}. It expires in 10 minutes.`,
+      });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown SMTP error';
+
+      this.logger.error(
+        `Failed to send interview OTP email to ${email}: ${message}`,
+      );
+
+      throw new InternalServerErrorException(
+        `Failed to send interview OTP email: ${message}`,
       );
     }
   }

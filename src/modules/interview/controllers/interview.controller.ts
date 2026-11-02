@@ -7,11 +7,11 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { User } from '../auth/decorators/user.decorator';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
-import { RecruiterRoleGuard } from '../company/guards/recruiter-role.guard';
-import { InterviewService } from './interview.service';
+import { User } from '../../auth/decorators/user.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
+import { RecruiterRoleGuard } from '../../company/guards/recruiter-role.guard';
+import { InterviewService } from '../services/interview.service';
 
 @Controller('interviews')
 @UseGuards(JwtAuthGuard, RecruiterRoleGuard)

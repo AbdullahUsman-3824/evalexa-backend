@@ -1,20 +1,28 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import {
-  ApplicationStatus,
-  InvitationDeliveryStatus,
-} from '@prisma/client';
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { ApplicationStatus, InvitationDeliveryStatus } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
-import { DatabaseService } from '../../database/database.service';
-import { MailService } from '../auth/mail.service';
+import { DatabaseService } from '../../../database/database.service';
+import { MailService } from '../../auth/mail.service';
 
 @Injectable()
 export class InterviewService {
+  private readonly logger = new Logger(InterviewService.name);
+
   constructor(
     private readonly db: DatabaseService,
     private readonly mailService: MailService,
     private readonly configService: ConfigService,
   ) {}
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // GET /interviews/applications
+  // ─────────────────────────────────────────────────────────────────────────────
 
   async getAllInterviewApplications(companyId: string) {
     if (!companyId) {
@@ -44,6 +52,7 @@ export class InterviewService {
           orderBy: { createdAt: 'desc' },
           take: 1,
           select: {
+            id: true,
             invitation: {
               select: {
                 id: true,
@@ -65,6 +74,7 @@ export class InterviewService {
               language: 'en',
             },
             select: {
+              id: true,
               invitation: {
                 select: {
                   id: true,
@@ -76,7 +86,7 @@ export class InterviewService {
 
         return {
           id: application.id,
-          interviewId: interview.invitation?.id ?? null,
+          interviewId: interview.id,
           candidateName: application.candidate.fullName,
           candidateEmail: application.candidate.email,
           jobTitle: application.job.title,
@@ -91,6 +101,10 @@ export class InterviewService {
       data: result,
     };
   }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // POST /interviews/:id/invitations/send
+  // ─────────────────────────────────────────────────────────────────────────────
 
   async sendInvitation(companyId: string, interviewId: string) {
     const interview = await this.db.interview.findUnique({
@@ -120,47 +134,70 @@ export class InterviewService {
             },
           },
         },
+        invitation: {
+          select: {
+            id: true,
+            expiresAt: true,
+            deliveryStatus: true,
+            verifiedAt: true,
+          },
+        },
       },
     });
 
+    // Return 404 so the interview ID is not enumerable across companies.
     if (!interview || interview.application.companyId !== companyId) {
-      throw new BadRequestException('Interview not found');
+      throw new NotFoundException('Interview not found');
     }
 
     if (interview.application.status !== ApplicationStatus.INTERVIEW) {
       throw new BadRequestException(
-        'Invitations can only be sent for interview applications',
+        'Invitations can only be sent for applications in INTERVIEW status',
+      );
+    }
+
+    // Rule: once invitation is sent, cannot resend until it expires.
+    // (OTP can be resent separately; invitation itself cannot.)
+    const existing = interview.invitation;
+    if (existing && existing.expiresAt.getTime() > Date.now()) {
+      throw new BadRequestException(
+        'An invitation has already been sent and is still valid. Wait until it expires before sending again.',
       );
     }
 
     const email = interview.application.candidate.email;
     if (!email) {
-      throw new BadRequestException(
-        'Candidate does not have an email address',
-      );
+      throw new BadRequestException('Candidate does not have an email address');
     }
 
-    const rawToken = randomBytes(32).toString('hex');
+    const rawToken = randomBytes(16).toString('hex');
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
-    const baseUrl = (
-      this.configService.get<string>('INTERVIEW_BASE_URL') ??
-      'http://localhost:3000/interviews'
-    ).replace(/\/$/, '');
-    const interviewLink = `${baseUrl}/${interview.id}?token=${rawToken}`;
 
+    const baseUrl = process.env.CLIENT_URL
+      ? process.env.CLIENT_URL.replace(/\/$/, '')
+      : 'http://localhost:3000';
+    const interviewLink = `${baseUrl}/interviews/${interview.id}?token=${rawToken}`;
+
+    // Only create/update when no valid invitation exists (expired or never sent)
     await this.db.interviewInvitation.upsert({
       where: { interviewId: interview.id },
       create: {
         interviewId: interview.id,
         tokenHash,
         expiresAt,
+        deliveryStatus: InvitationDeliveryStatus.PENDING,
       },
       update: {
         tokenHash,
         expiresAt,
         deliveryStatus: InvitationDeliveryStatus.PENDING,
         sentAt: null,
+        verifiedAt: null,
+        otpHash: null,
+        otpExpiresAt: null,
+        otpSentAt: null,
+        otpAttempts: 0,
       },
     });
 
@@ -177,6 +214,11 @@ export class InterviewService {
         where: { interviewId: interview.id },
         data: { deliveryStatus: InvitationDeliveryStatus.FAILED },
       });
+      this.logger.error(
+        `Failed to send interview invitation for interview ${interview.id}: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
       throw error;
     }
 
@@ -196,7 +238,7 @@ export class InterviewService {
 
     return {
       success: true,
-      message: `Interview invitation sent to ${email}.`,
+      message: 'Interview invitation sent to candidate.',
       data: invitation,
     };
   }

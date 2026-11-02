@@ -114,6 +114,7 @@ model InterviewInvitation {
   // OTP verification (store hash only)
   otpHash      String?
   otpExpiresAt DateTime? @db.Timestamptz(6)
+  otpSentAt    DateTime? @db.Timestamptz(6)
   otpAttempts  Int       @default(0)
   verifiedAt   DateTime? @db.Timestamptz(6)
 
