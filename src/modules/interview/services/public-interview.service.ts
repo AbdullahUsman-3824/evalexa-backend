@@ -6,7 +6,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { InterviewStatus, InvitationDeliveryStatus } from '@prisma/client';
+import {
+  ApplicationStatus,
+  ExtensionRequestStatus,
+  InterviewStatus,
+  InvitationDeliveryStatus,
+} from '@prisma/client';
 import { hash, compare } from 'bcrypt';
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { DatabaseService } from '../../../database/database.service';
@@ -31,6 +36,62 @@ export class PublicInterviewService {
     private readonly jwtService: JwtService,
     private readonly interviewService: InterviewService,
   ) {}
+
+  async requestInvitationExtension(
+    interviewId: string,
+    rawToken: string,
+    reason: string,
+  ) {
+    const invitation = await this.findInvitationForExtensionRequest(
+      interviewId,
+      rawToken,
+    );
+
+    if (
+      invitation.interview.status !== InterviewStatus.PENDING &&
+      invitation.interview.status !== InterviewStatus.EXPIRED
+    ) {
+      throw new BadRequestException(
+        'This interview is no longer eligible for a new invitation',
+      );
+    }
+
+    const request = await this.db.$transaction(async (transaction) => {
+      await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${interviewId}))`;
+
+      const pendingRequest =
+        await transaction.interviewExtensionRequest.findFirst({
+          where: {
+            interviewId,
+            status: ExtensionRequestStatus.PENDING,
+          },
+          select: { id: true },
+        });
+
+      if (pendingRequest) {
+        throw new BadRequestException(
+          'A pending invitation extension request already exists',
+        );
+      }
+
+      return transaction.interviewExtensionRequest.create({
+        data: {
+          interviewId,
+          reason,
+          status: ExtensionRequestStatus.PENDING,
+        },
+        select: {
+          id: true,
+          interviewId: true,
+          status: true,
+          reason: true,
+          requestedAt: true,
+        },
+      });
+    });
+
+    return { success: true, data: request };
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // GET /public/interviews/:id/preview?token=<token>
@@ -467,6 +528,67 @@ export class PublicInterviewService {
       ...invitation,
       deliveryStatus,
     };
+  }
+
+  private async findInvitationForExtensionRequest(
+    interviewId: string,
+    rawToken: string,
+  ) {
+    const invitation = await this.db.interviewInvitation.findUnique({
+      where: { interviewId },
+      select: {
+        id: true,
+        tokenHash: true,
+        expiresAt: true,
+        sentAt: true,
+        deliveryStatus: true,
+        interview: {
+          select: {
+            id: true,
+            status: true,
+            application: {
+              select: { status: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    const providedHash = Buffer.from(this.hashToken(rawToken), 'utf8');
+    const storedHash = Buffer.from(invitation.tokenHash, 'utf8');
+    const tokenValid =
+      providedHash.length === storedHash.length &&
+      timingSafeEqual(providedHash, storedHash);
+
+    if (!tokenValid) {
+      throw new UnauthorizedException('Invalid invitation token');
+    }
+
+    const deliveryStatus =
+      await this.interviewService.updateInvitationStatusIfExpired(invitation);
+
+    if (
+      !invitation.sentAt ||
+      deliveryStatus !== InvitationDeliveryStatus.EXPIRED
+    ) {
+      throw new BadRequestException(
+        'Only expired invitations that were sent can be extended',
+      );
+    }
+
+    if (
+      invitation.interview.application.status !== ApplicationStatus.INTERVIEW
+    ) {
+      throw new BadRequestException(
+        'This interview is no longer eligible for a new invitation',
+      );
+    }
+
+    return { ...invitation, deliveryStatus };
   }
 
   private hashToken(rawToken: string): string {

@@ -5,10 +5,19 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ApplicationStatus, InvitationDeliveryStatus } from '@prisma/client';
+import {
+  ApplicationStatus,
+  ExtensionRequestStatus,
+  InterviewStatus,
+  InvitationDeliveryStatus,
+  Prisma,
+} from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { DatabaseService } from '../../../database/database.service';
 import { MailService } from '../../auth/mail.service';
+import type { InterviewExtensionRequestQueryDto } from '../dto/interview-extension-request.dto';
+
+type InterviewDatabaseClient = DatabaseService | Prisma.TransactionClient;
 
 @Injectable()
 export class InterviewService {
@@ -111,8 +120,13 @@ export class InterviewService {
   // POST /interviews/:id/invitations/send
   // ─────────────────────────────────────────────────────────────────────────────
 
-  async sendInvitation(companyId: string, interviewId: string) {
-    const interview = await this.db.interview.findUnique({
+  async sendInvitation(
+    companyId: string,
+    interviewId: string,
+    db: InterviewDatabaseClient = this.db,
+    requireEligibleInterview = false,
+  ) {
+    const interview = await db.interview.findUnique({
       where: { id: interviewId },
       select: {
         id: true,
@@ -161,6 +175,15 @@ export class InterviewService {
         'Invitations can only be sent for applications in INTERVIEW status',
       );
     }
+    if (
+      requireEligibleInterview &&
+      interview.status !== InterviewStatus.PENDING &&
+      interview.status !== InterviewStatus.EXPIRED
+    ) {
+      throw new BadRequestException(
+        'Invitations cannot be sent for an interview that is no longer available',
+      );
+    }
 
     // Normalize existing invitation status (marks it EXPIRED if needed)
     const existing = interview.invitation
@@ -168,6 +191,7 @@ export class InterviewService {
           ...interview.invitation,
           deliveryStatus: await this.updateInvitationStatusIfExpired(
             interview.invitation,
+            db,
           ),
         }
       : null;
@@ -204,7 +228,7 @@ export class InterviewService {
     // - Always generates a new token (invalidates previous one)
     // - Resets OTP / verification state
     // - Sets deliveryStatus to PENDING until email succeeds
-    await this.db.interviewInvitation.upsert({
+    await db.interviewInvitation.upsert({
       where: { interviewId: interview.id },
       create: {
         interviewId: interview.id,
@@ -235,7 +259,7 @@ export class InterviewService {
       );
     } catch (error: unknown) {
       // Mark as FAILED if email sending fails
-      await this.db.interviewInvitation.update({
+      await db.interviewInvitation.update({
         where: { interviewId: interview.id },
         data: { deliveryStatus: InvitationDeliveryStatus.FAILED },
       });
@@ -249,7 +273,7 @@ export class InterviewService {
     }
 
     // Email succeeded → mark as SENT and set sentAt
-    const invitation = await this.db.interviewInvitation.update({
+    const invitation = await db.interviewInvitation.update({
       where: { interviewId: interview.id },
       data: {
         deliveryStatus: InvitationDeliveryStatus.SENT,
@@ -275,11 +299,14 @@ export class InterviewService {
     };
   }
 
-  async updateInvitationStatusIfExpired(invitation: {
-    id: string;
-    expiresAt: Date;
-    deliveryStatus: InvitationDeliveryStatus;
-  }) {
+  async updateInvitationStatusIfExpired(
+    invitation: {
+      id: string;
+      expiresAt: Date;
+      deliveryStatus: InvitationDeliveryStatus;
+    },
+    db: InterviewDatabaseClient = this.db,
+  ) {
     if (
       invitation.deliveryStatus === InvitationDeliveryStatus.EXPIRED ||
       invitation.expiresAt.getTime() > Date.now()
@@ -287,11 +314,199 @@ export class InterviewService {
       return invitation.deliveryStatus;
     }
 
-    await this.db.interviewInvitation.update({
+    await db.interviewInvitation.update({
       where: { id: invitation.id },
       data: { deliveryStatus: InvitationDeliveryStatus.EXPIRED },
     });
 
     return InvitationDeliveryStatus.EXPIRED;
+  }
+
+  async getInvitationExtensionRequests(
+    companyId: string,
+    query: InterviewExtensionRequestQueryDto,
+  ) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const where = {
+      status: query.status,
+      interview: { application: { companyId } },
+    };
+
+    const [requests, total] = await Promise.all([
+      this.db.interviewExtensionRequest.findMany({
+        where,
+        orderBy: { requestedAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: this.extensionRequestSelect,
+      }),
+      this.db.interviewExtensionRequest.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: requests.map((request) => this.serializeExtensionRequest(request)),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(Math.ceil(total / limit), 1),
+      },
+    };
+  }
+
+  async approveInvitationExtensionRequest(
+    companyId: string,
+    reviewerId: string,
+    interviewId: string,
+    requestId: string,
+    decisionNote?: string,
+  ) {
+    return this.db.$transaction(async (transaction) => {
+      await transaction.$executeRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${interviewId}))
+    `;
+
+      const request = await transaction.interviewExtensionRequest.findFirst({
+        where: {
+          id: requestId,
+          interviewId,
+          status: ExtensionRequestStatus.PENDING,
+          interview: { application: { companyId } },
+        },
+      });
+
+      if (!request) {
+        throw new NotFoundException(
+          'Pending invitation extension request not found',
+        );
+      }
+
+      const invitation = await this.sendInvitation(
+        companyId,
+        interviewId,
+        transaction,
+        true,
+      );
+
+      const updatedRequest = await transaction.interviewExtensionRequest.update(
+        {
+          where: { id: requestId },
+          data: {
+            status: ExtensionRequestStatus.APPROVED,
+            reviewedAt: new Date(),
+            reviewedById: reviewerId,
+            decisionNote: decisionNote ?? null,
+          },
+        },
+      );
+
+      return {
+        success: true,
+        data: {
+          request: updatedRequest,
+          invitation: invitation.data,
+        },
+      };
+    });
+  }
+
+  async rejectInvitationExtensionRequest(
+    companyId: string,
+    reviewerId: string,
+    interviewId: string,
+    requestId: string,
+    decisionNote?: string,
+  ) {
+    return this.db.$transaction(async (transaction) => {
+      await transaction.$executeRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${interviewId}))
+    `;
+
+      const request = await transaction.interviewExtensionRequest.findFirst({
+        where: {
+          id: requestId,
+          interviewId,
+          status: ExtensionRequestStatus.PENDING,
+          interview: { application: { companyId } },
+        },
+      });
+
+      if (!request) {
+        throw new NotFoundException(
+          'Pending invitation extension request not found',
+        );
+      }
+
+      const updatedRequest = await transaction.interviewExtensionRequest.update(
+        {
+          where: { id: requestId },
+          data: {
+            status: ExtensionRequestStatus.REJECTED,
+            reviewedAt: new Date(),
+            reviewedById: reviewerId,
+            decisionNote: decisionNote ?? null,
+          },
+        },
+      );
+
+      return {
+        success: true,
+        data: updatedRequest,
+      };
+    });
+  }
+
+  private readonly extensionRequestSelect = {
+    id: true,
+    interviewId: true,
+    reason: true,
+    status: true,
+    requestedAt: true,
+    reviewedAt: true,
+    decisionNote: true,
+    reviewedBy: { select: { id: true, fullName: true, email: true } },
+    interview: {
+      select: {
+        application: {
+          select: {
+            candidate: { select: { fullName: true, email: true } },
+            job: { select: { title: true } },
+          },
+        },
+      },
+    },
+  } satisfies Prisma.InterviewExtensionRequestSelect;
+
+  private serializeExtensionRequest(request: {
+    id: string;
+    interviewId: string;
+    reason: string;
+    status: ExtensionRequestStatus;
+    requestedAt: Date;
+    reviewedAt: Date | null;
+    decisionNote: string | null;
+    reviewedBy: { id: string; fullName: string; email: string } | null;
+    interview: {
+      application: {
+        candidate: { fullName: string; email: string | null };
+        job: { title: string };
+      };
+    };
+  }) {
+    return {
+      id: request.id,
+      interviewId: request.interviewId,
+      candidateName: request.interview.application.candidate.fullName,
+      candidateEmail: request.interview.application.candidate.email,
+      jobTitle: request.interview.application.job.title,
+      reason: request.reason,
+      status: request.status,
+      requestedAt: request.requestedAt,
+      reviewedAt: request.reviewedAt,
+      reviewer: request.reviewedBy,
+      decisionNote: request.decisionNote,
+    };
   }
 }

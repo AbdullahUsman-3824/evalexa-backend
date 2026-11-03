@@ -15,6 +15,7 @@ import {
   ValidateTokenQueryDto,
   VerifyOtpDto,
 } from '../dto/interview-access.dto';
+import { CreateInterviewExtensionRequestDto } from '../dto/interview-extension-request.dto';
 import { PublicInterviewService } from '../services/public-interview.service';
 
 @Controller('public/interviews')
@@ -22,6 +23,20 @@ export class PublicInterviewController {
   constructor(
     private readonly publicInterviewService: PublicInterviewService,
   ) {}
+
+  // POST /public/interviews/:id/invitation-extension-requests
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post(':id/invitation-extension-requests')
+  requestInvitationExtension(
+    @Param('id', ParseUUIDPipe) interviewId: string,
+    @Body() body: CreateInterviewExtensionRequestDto,
+  ) {
+    return this.publicInterviewService.requestInvitationExtension(
+      interviewId,
+      body.token,
+      body.reason,
+    );
+  }
 
   // GET /public/interviews/:id/preview?token=<token>
   @Get(':id/preview')

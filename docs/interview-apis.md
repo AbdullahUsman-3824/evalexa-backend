@@ -66,6 +66,196 @@ an error if the interview is not owned by the recruiter's company, the
 application is not in `INTERVIEW` status, or the candidate has no email
 address.
 
+## Request an invitation extension
+
+`POST /public/interviews/:id/invitation-extension-requests`
+
+Public endpoint. The candidate must provide the original invitation token and
+a reason for requesting another invitation. The token is validated against the
+stored invitation-token hash and must belong to the requested interview.
+
+The invitation must have been sent and must be expired. The interview must
+still be eligible for an invitation (`PENDING` or `EXPIRED`), and its
+application must remain in `INTERVIEW` status. Invalid, unrelated, active, or
+revoked invitations are rejected. The endpoint is rate-limited to five
+requests per minute.
+
+### Request body
+
+```json
+{
+  "token": "<original-invitation-token>",
+  "reason": "I was unable to complete the interview before the invitation expired."
+}
+```
+
+`reason` is trimmed, required, and limited to 2,000 characters. Only one
+`PENDING` extension request may exist for an interview at a time.
+
+### Response `200`
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "request-uuid",
+    "interviewId": "interview-uuid",
+    "status": "PENDING",
+    "reason": "I was unable to complete the interview before the invitation expired.",
+    "requestedAt": "2026-11-03T22:45:00.000Z"
+  }
+}
+```
+
+## List invitation extension requests
+
+`GET /interviews/invitation-extension-requests`
+
+Recruiter endpoint. Requires an authenticated recruiter belonging to a
+company. Only requests for interviews associated with that recruiter's company
+are returned.
+
+Use `status=PENDING`, `status=APPROVED`, or `status=REJECTED` to filter results.
+Without a status, all requests are returned. Results are ordered newest first
+and support `page` (default `1`) and `limit` (default `20`, maximum `100`).
+
+### Response `200`
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "request-uuid",
+      "interviewId": "interview-uuid",
+      "candidateName": "Jane Doe",
+      "candidateEmail": "jane@example.com",
+      "jobTitle": "Senior Software Engineer",
+      "reason": "I was unable to complete the interview before the invitation expired.",
+      "status": "PENDING",
+      "requestedAt": "2026-11-03T22:45:00.000Z",
+      "reviewedAt": null,
+      "reviewer": null,
+      "decisionNote": null
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "totalPages": 1
+  }
+}
+```
+
+## Approve an invitation extension request
+
+`POST /interviews/:interviewId/invitation-extension-requests/:requestId/approve`
+
+Recruiter endpoint. The request must belong to the specified interview and to
+an interview owned by the recruiter's company. Only `PENDING` requests can be
+approved.
+
+Approval calls the same `InterviewService.sendInvitation` method used by
+`POST /interviews/:id/invitations/send`. It therefore generates and hashes a
+new token, invalidates the previous token, resets invitation state, sends the
+email, and updates delivery status. The request is marked `APPROVED` only
+after invitation delivery succeeds.
+
+### Request body
+
+```json
+{
+  "decisionNote": "Approved. Candidate can proceed with the interview."
+}
+```
+
+`decisionNote` is optional, trimmed, and limited to 2,000 characters.
+
+### Response `200`
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "request-uuid",
+    "interviewId": "interview-uuid",
+    "candidateName": "Jane Doe",
+    "candidateEmail": "jane@example.com",
+    "jobTitle": "Senior Software Engineer",
+    "reason": "I was unable to complete the interview before the invitation expired.",
+    "status": "APPROVED",
+    "requestedAt": "2026-11-03T22:45:00.000Z",
+    "reviewedAt": "2026-11-03T22:50:00.000Z",
+    "reviewer": {
+      "id": "recruiter-uuid",
+      "fullName": "Recruiter Name",
+      "email": "recruiter@example.com"
+    },
+    "decisionNote": "Approved. Candidate can proceed with the interview.",
+    "invitation": {
+      "id": "invitation-uuid",
+      "deliveryStatus": "SENT",
+      "expiresAt": "2026-11-06T22:50:00.000Z",
+      "sentAt": "2026-11-03T22:50:00.000Z",
+      "isResend": true
+    }
+  }
+}
+```
+
+If sending fails, the request remains `PENDING` and the error is propagated.
+Already reviewed requests cannot be approved.
+
+## Reject an invitation extension request
+
+`POST /interviews/:interviewId/invitation-extension-requests/:requestId/reject`
+
+Recruiter endpoint. The same company-ownership, interview-ownership, and
+`PENDING` status checks used by approval apply here. Rejecting a request does
+not modify the interview or its invitation.
+
+### Request body
+
+```json
+{
+  "decisionNote": "The candidate did not provide a valid reason."
+}
+```
+
+The body may be empty. If supplied, `decisionNote` is trimmed and limited to
+2,000 characters.
+
+### Response `200`
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "request-uuid",
+    "interviewId": "interview-uuid",
+    "candidateName": "Jane Doe",
+    "candidateEmail": "jane@example.com",
+    "jobTitle": "Senior Software Engineer",
+    "reason": "I was unable to complete the interview before the invitation expired.",
+    "status": "REJECTED",
+    "requestedAt": "2026-11-03T22:45:00.000Z",
+    "reviewedAt": "2026-11-03T22:50:00.000Z",
+    "reviewer": {
+      "id": "recruiter-uuid",
+      "fullName": "Recruiter Name",
+      "email": "recruiter@example.com"
+    },
+    "decisionNote": "The candidate did not provide a valid reason."
+  }
+}
+```
+
+Concurrent candidate submissions and recruiter decisions are serialized with a
+per-interview PostgreSQL advisory transaction lock. This prevents duplicate
+pending requests and prevents two recruiters from reviewing or sending for the
+same request simultaneously without adding a database constraint.
+
 ## Preview an interview invitation
 
 `GET /public/interviews/:id/preview?token=<invitation-token>`
