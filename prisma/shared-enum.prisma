@@ -167,6 +167,7 @@ enum InvitationDeliveryStatus {
   PENDING
   SENT
   FAILED
+  EXPIRED
 }
 
 enum ExtensionRequestStatus {

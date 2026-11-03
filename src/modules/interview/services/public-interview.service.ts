@@ -11,6 +11,7 @@ import { hash, compare } from 'bcrypt';
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { DatabaseService } from '../../../database/database.service';
 import { MailService } from '../../auth/mail.service';
+import { InterviewService } from './interview.service';
 
 @Injectable()
 export class PublicInterviewService {
@@ -28,17 +29,39 @@ export class PublicInterviewService {
     private readonly db: DatabaseService,
     private readonly mailService: MailService,
     private readonly jwtService: JwtService,
+    private readonly interviewService: InterviewService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
   // GET /public/interviews/:id/preview?token=<token>
   // ─────────────────────────────────────────────────────────────────────────
 
+  // GET /public/interviews/:id/preview?token=<token>
   async previewInterview(interviewId: string, rawToken: string) {
-    const invitation = await this.findValidInvitation(interviewId, rawToken);
+    const invitation = await this.findInvitationForPreview(
+      interviewId,
+      rawToken,
+    );
 
-    // alreadyVerified is scoped to THIS invitation: a resent invitation starts
-    // with verifiedAt=null even if the old one was previously verified.
+    // Token is valid but invitation has expired → return structured response
+    // so the frontend can redirect the candidate to request a new invitation
+    if (invitation.deliveryStatus === InvitationDeliveryStatus.EXPIRED) {
+      return {
+        success: false,
+        code: 'INVITATION_EXPIRED',
+        message:
+          'This invitation has expired. Please request a new invitation from the recruiter.',
+        data: {
+          interviewId: invitation.interview.id,
+          expired: true,
+          canRequestNew: true,
+          jobTitle: invitation.interview.application.job.title,
+          companyName: invitation.interview.application.company.name,
+        },
+      };
+    }
+
+    // Normal successful preview
     const alreadyVerified = invitation.verifiedAt !== null;
 
     return {
@@ -133,7 +156,7 @@ export class PublicInterviewService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // POST /public/interviews/:id/verify-otp  (tasks #9, #10)
+  // POST /public/interviews/:id/verify-otp
   // ─────────────────────────────────────────────────────────────────────────
 
   async verifyOtp(interviewId: string, rawToken: string, otp: string) {
@@ -211,7 +234,7 @@ export class PublicInterviewService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // POST /interviews/:id/start  (tasks #11, #12, #16)
+  // POST /interviews/:id/start
   // ─────────────────────────────────────────────────────────────────────────
 
   async startInterview(interviewId: string, sessionInterviewId: string) {
@@ -294,6 +317,10 @@ export class PublicInterviewService {
     };
   }
 
+  // ────────────────────────────────────────────────────────────────────────────
+  // Helpers
+  // ────────────────────────────────────────────────────────────────────────────
+
   private generateOtp(): string {
     return randomInt(0, 1_000_000).toString().padStart(6, '0');
   }
@@ -307,7 +334,9 @@ export class PublicInterviewService {
    * Looks up an InterviewInvitation by interviewId, validates the raw token
    * with timing-safe comparison, checks expiry and delivery status.
    *
-   * Does NOT check or modify OTP state — safe to call from preview.
+   * Throws on invalid token, expired invitation, or unavailable invitation.
+   * Does NOT check or modify OTP state — safe to call from preview as well,
+   * but prefer findInvitationForPreview for the preview route.
    */
   async findValidInvitation(interviewId: string, rawToken: string) {
     const invitation = await this.db.interviewInvitation.findUnique({
@@ -318,7 +347,7 @@ export class PublicInterviewService {
         otpHash: true,
         otpExpiresAt: true,
         otpAttempts: true,
-        otpSentAt: true, // Added missing field (used by requestOtp)
+        otpSentAt: true,
         verifiedAt: true,
         expiresAt: true,
         sentAt: true,
@@ -342,11 +371,11 @@ export class PublicInterviewService {
     });
 
     if (!invitation) {
-      // Use a generic message to avoid confirming whether an interview ID exists.
+      // Generic message to avoid confirming whether an interview ID exists
       throw new NotFoundException('Invitation not found');
     }
 
-    // Timing-safe token comparison to prevent timing attacks.
+    // Timing-safe token comparison
     const providedHash = Buffer.from(this.hashToken(rawToken), 'utf8');
     const storedHash = Buffer.from(invitation.tokenHash, 'utf8');
     const tokenValid =
@@ -357,7 +386,11 @@ export class PublicInterviewService {
       throw new UnauthorizedException('Invalid invitation token');
     }
 
-    if (invitation.expiresAt.getTime() <= Date.now()) {
+    // Update status to EXPIRED if the invitation has passed its expiry time
+    const deliveryStatus =
+      await this.interviewService.updateInvitationStatusIfExpired(invitation);
+
+    if (deliveryStatus === InvitationDeliveryStatus.EXPIRED) {
       throw new BadRequestException('Invitation has expired');
     }
 
@@ -375,6 +408,65 @@ export class PublicInterviewService {
     }
 
     return invitation;
+  }
+  /**
+   * Used exclusively by the preview endpoint.
+   * Returns the invitation even when it is expired (after updating the status).
+   * Still rejects invalid tokens and non-existent invitations.
+   */
+  private async findInvitationForPreview(
+    interviewId: string,
+    rawToken: string,
+  ) {
+    const invitation = await this.db.interviewInvitation.findUnique({
+      where: { interviewId },
+      select: {
+        id: true,
+        tokenHash: true,
+        verifiedAt: true,
+        expiresAt: true,
+        deliveryStatus: true,
+        interview: {
+          select: {
+            id: true,
+            language: true,
+            status: true,
+            startedAt: true,
+            application: {
+              select: {
+                candidate: { select: { fullName: true } },
+                company: { select: { name: true } },
+                job: { select: { title: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    // Timing-safe token comparison
+    const providedHash = Buffer.from(this.hashToken(rawToken), 'utf8');
+    const storedHash = Buffer.from(invitation.tokenHash, 'utf8');
+    const tokenValid =
+      providedHash.length === storedHash.length &&
+      timingSafeEqual(providedHash, storedHash);
+
+    if (!tokenValid) {
+      throw new UnauthorizedException('Invalid invitation token');
+    }
+
+    // Update status if expired and return the (possibly updated) status
+    const deliveryStatus =
+      await this.interviewService.updateInvitationStatusIfExpired(invitation);
+
+    return {
+      ...invitation,
+      deliveryStatus,
+    };
   }
 
   private hashToken(rawToken: string): string {

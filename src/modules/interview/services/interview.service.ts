@@ -56,6 +56,7 @@ export class InterviewService {
             invitation: {
               select: {
                 id: true,
+                expiresAt: true,
                 deliveryStatus: true,
               },
             },
@@ -78,11 +79,16 @@ export class InterviewService {
               invitation: {
                 select: {
                   id: true,
+                  expiresAt: true,
                   deliveryStatus: true,
                 },
               },
             },
           }));
+
+        const invitationDeliveryStatus = interview.invitation
+          ? await this.updateInvitationStatusIfExpired(interview.invitation)
+          : null;
 
         return {
           id: application.id,
@@ -90,8 +96,7 @@ export class InterviewService {
           candidateName: application.candidate.fullName,
           candidateEmail: application.candidate.email,
           jobTitle: application.job.title,
-          invitationDeliveryStatus:
-            interview.invitation?.deliveryStatus ?? null,
+          invitationDeliveryStatus,
         };
       }),
     );
@@ -140,12 +145,13 @@ export class InterviewService {
             expiresAt: true,
             deliveryStatus: true,
             verifiedAt: true,
+            sentAt: true,
           },
         },
       },
     });
 
-    // Return 404 so the interview ID is not enumerable across companies.
+    // Return 404 so the interview ID is not enumerable across companies
     if (!interview || interview.application.companyId !== companyId) {
       throw new NotFoundException('Interview not found');
     }
@@ -156,10 +162,22 @@ export class InterviewService {
       );
     }
 
-    // Rule: once invitation is sent, cannot resend until it expires.
-    // (OTP can be resent separately; invitation itself cannot.)
-    const existing = interview.invitation;
-    if (existing && existing.expiresAt.getTime() > Date.now()) {
+    // Normalize existing invitation status (marks it EXPIRED if needed)
+    const existing = interview.invitation
+      ? {
+          ...interview.invitation,
+          deliveryStatus: await this.updateInvitationStatusIfExpired(
+            interview.invitation,
+          ),
+        }
+      : null;
+
+    // Prevent sending while a valid (non-expired) invitation still exists
+    if (
+      existing &&
+      existing.deliveryStatus !== InvitationDeliveryStatus.EXPIRED &&
+      existing.expiresAt.getTime() > Date.now()
+    ) {
       throw new BadRequestException(
         'An invitation has already been sent and is still valid. Wait until it expires before sending again.',
       );
@@ -170,16 +188,22 @@ export class InterviewService {
       throw new BadRequestException('Candidate does not have an email address');
     }
 
+    // Generate a new secure token every time (first send or resend)
     const rawToken = randomBytes(16).toString('hex');
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
-    const expiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // 3 days
 
     const baseUrl = process.env.CLIENT_URL
       ? process.env.CLIENT_URL.replace(/\/$/, '')
       : 'http://localhost:3000';
     const interviewLink = `${baseUrl}/interviews/${interview.id}?token=${rawToken}`;
 
-    // Only create/update when no valid invitation exists (expired or never sent)
+    const isResend = !!existing;
+
+    // Create or update invitation
+    // - Always generates a new token (invalidates previous one)
+    // - Resets OTP / verification state
+    // - Sets deliveryStatus to PENDING until email succeeds
     await this.db.interviewInvitation.upsert({
       where: { interviewId: interview.id },
       create: {
@@ -189,8 +213,8 @@ export class InterviewService {
         deliveryStatus: InvitationDeliveryStatus.PENDING,
       },
       update: {
-        tokenHash,
-        expiresAt,
+        tokenHash, // new token → old token is now invalid
+        expiresAt, // reset expiry
         deliveryStatus: InvitationDeliveryStatus.PENDING,
         sentAt: null,
         verifiedAt: null,
@@ -210,10 +234,12 @@ export class InterviewService {
         interview.application.job.title,
       );
     } catch (error: unknown) {
+      // Mark as FAILED if email sending fails
       await this.db.interviewInvitation.update({
         where: { interviewId: interview.id },
         data: { deliveryStatus: InvitationDeliveryStatus.FAILED },
       });
+
       this.logger.error(
         `Failed to send interview invitation for interview ${interview.id}: ${
           error instanceof Error ? error.message : 'Unknown error'
@@ -222,6 +248,7 @@ export class InterviewService {
       throw error;
     }
 
+    // Email succeeded → mark as SENT and set sentAt
     const invitation = await this.db.interviewInvitation.update({
       where: { interviewId: interview.id },
       data: {
@@ -238,8 +265,33 @@ export class InterviewService {
 
     return {
       success: true,
-      message: 'Interview invitation sent to candidate.',
-      data: invitation,
+      message: isResend
+        ? 'New interview invitation sent to candidate (previous invitation invalidated).'
+        : 'Interview invitation sent to candidate.',
+      data: {
+        ...invitation,
+        isResend,
+      },
     };
+  }
+
+  async updateInvitationStatusIfExpired(invitation: {
+    id: string;
+    expiresAt: Date;
+    deliveryStatus: InvitationDeliveryStatus;
+  }) {
+    if (
+      invitation.deliveryStatus === InvitationDeliveryStatus.EXPIRED ||
+      invitation.expiresAt.getTime() > Date.now()
+    ) {
+      return invitation.deliveryStatus;
+    }
+
+    await this.db.interviewInvitation.update({
+      where: { id: invitation.id },
+      data: { deliveryStatus: InvitationDeliveryStatus.EXPIRED },
+    });
+
+    return InvitationDeliveryStatus.EXPIRED;
   }
 }
