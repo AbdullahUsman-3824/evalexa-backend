@@ -6,10 +6,14 @@ export const FASTAPI_BASE_URL = `${(process.env.FASTAPI_URL ?? defaultFastApiBas
 
 export const FASTAPI_ENDPOINTS = {
   RESUME: {
-    PARSE: `${FASTAPI_BASE_URL}/resume/parse`,
-    HEALTH: '/health',
+    PARSE: '/resume/parse',
   },
   RANKING: {
-    RANK: `${FASTAPI_BASE_URL}/rank`,
+    RANK: '/rank',
+  },
+  INTERVIEW: {
+    GENERATE_QUESTIONS: '/interview/generate-questions',
+    TRANSCRIBE: '/interview/transcribe',
+    EVALUATE: '/interview/evaluate',
   },
 } as const;

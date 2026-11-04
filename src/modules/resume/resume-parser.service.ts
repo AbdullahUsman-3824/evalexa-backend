@@ -1,85 +1,20 @@
-import { HttpService } from '@nestjs/axios';
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { firstValueFrom } from 'rxjs';
 import FormData from 'form-data';
-import { FASTAPI_ENDPOINTS } from '../../common/constants/fastapi.constants';
-import axios from 'axios';
+import { FastApiService } from '../../common/fastapi/fastapi.service';
+import { ResumeData } from '../../common/fastapi/contracts';
 
-export interface ResumeBasics {
-  fullName: string;
-  email: string;
-  phone: string;
-  location: string;
-  linkedinUrl: string;
-  githubUrl: string;
-  portfolioUrl: string;
-  headline: string;
-  summary: string;
-}
-
-export interface ResumeSkill {
-  name: string;
-  category: string;
-}
-
-export interface ResumeEducation {
-  degree: string;
-  field: string;
-  institution: string;
-  startDate: string;
-  endDate: string;
-  grade: string;
-}
-
-export interface ResumeExperience {
-  title?: string;
-  company?: string;
-  startDate?: string;
-  endDate?: string;
-  isCurrent?: boolean;
-  description?: string;
-}
-
-export interface ResumeProject {
-  name: string;
-  description: string;
-  technologies: string[];
-  url: string;
-}
-
-export interface ResumeMeta {
-  totalExperienceMonths: number;
-  parserVersion: string;
-  confidenceScore: number;
-}
-
-export interface ParsedResumeData {
-  basics: ResumeBasics;
-  skills: ResumeSkill[];
-  education: ResumeEducation[];
-  experience: ResumeExperience[];
-  projects: ResumeProject[];
-  certifications: string[];
-  interests: string[];
-  meta: ResumeMeta;
-}
-
-interface ResumeParserResponse {
-  data: ParsedResumeData;
-}
-
-function isParsedResumeData(value: unknown): value is ParsedResumeData {
+function isParsedResumeData(value: unknown): value is ResumeData {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
 
-  const candidate = value as Partial<ParsedResumeData>;
+  const candidate = value as Partial<ResumeData>;
   return typeof candidate.basics === 'object' && candidate.basics !== null;
 }
 
 @Injectable()
 export class ResumeParserService {
-  constructor(private readonly httpService: HttpService) {}
+  constructor(private readonly fastApi: FastApiService) {}
 
   private getMimeType(fileName: string): string {
     const ext = fileName.toLowerCase().split('.').pop() || '';
@@ -94,57 +29,46 @@ export class ResumeParserService {
   async parseResume(
     input: string,
     fileName?: string,
-  ): Promise<ParsedResumeData>;
-  async parseResume(input: Buffer, fileName: string): Promise<ParsedResumeData>;
+  ): Promise<ResumeData>;
+  async parseResume(input: Buffer, fileName: string): Promise<ResumeData>;
   async parseResume(
     input: string | Buffer,
     fileName?: string,
-  ): Promise<ParsedResumeData> {
+  ): Promise<ResumeData> {
     if (typeof input === 'string') {
-      // URL se file fetch karo, buffer mein convert karo
-      const fileResponse = await firstValueFrom(
-        this.httpService.get(input, { responseType: 'arraybuffer' }),
-      );
-      const buffer = Buffer.from(fileResponse.data);
+      // Fetch file from URL → buffer, then re-enter as Buffer path
+      const fileData = await this.fastApi.get<ArrayBuffer>(input, {
+        responseType: 'arraybuffer',
+        // absolute URL bypasses FastAPI baseURL
+      });
+      const buffer = Buffer.from(fileData);
       const derivedFileName =
         fileName || input.split('/').pop() || 'resume.pdf';
       return this.parseResume(buffer, derivedFileName);
     }
-    try {
-      const response = await firstValueFrom(
-        this.httpService.post<ResumeParserResponse>(
-          FASTAPI_ENDPOINTS.RESUME.PARSE,
-          this.buildRequestBody(input, fileName),
-          this.buildRequestConfig(input, fileName),
-        ),
-      );
 
-      const parsed = response.data?.data;
-
-      if (!isParsedResumeData(parsed)) {
-        throw new BadRequestException('Invalid parser response');
-      }
-
-      return parsed;
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-
-      if (axios.isAxiosError(error)) {
-        console.log('Resume parse error status:', error.response?.status);
-        console.log(
-          'Resume parse error detail:',
-          JSON.stringify(error.response?.data, null, 2),
-        );
-        console.log('[DEBUG] raw error: ', error.toJSON());
-      } else {
-        console.log('Error parsing resume:', error);
-      }
-
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new BadRequestException(`Failed to parse resume: ${message}`);
+    if (!fileName) {
+      throw new BadRequestException('File name is required');
     }
+    if (input.length === 0) {
+      throw new BadRequestException('Resume file is required');
+    }
+
+    const form = new FormData();
+    form.append('file', input, {
+      filename: fileName,
+      contentType: this.getMimeType(fileName),
+    });
+
+    const response = await this.fastApi.parseResume(form);
+
+    const parsed = response?.data;
+
+    if (!isParsedResumeData(parsed)) {
+      throw new BadRequestException('Invalid parser response');
+    }
+
+    return parsed;
   }
 
   private buildRequestBody(

@@ -14,7 +14,8 @@ import {
   ResumeParsePreviewDto,
 } from './dto/resume-upload-response.dto';
 import { UploadedResumeFileDto } from './dto/uploaded-resume-file.dto';
-import { ResumeParserService, ParsedResumeData } from './resume-parser.service';
+import { ResumeParserService } from './resume-parser.service';
+import { ResumeData } from '../../common/fastapi/contracts';
 
 type Db = DatabaseService | Prisma.TransactionClient;
 
@@ -171,7 +172,6 @@ export class ResumeService {
     });
   }
 
-
   /**
    * Bulk path: upload file + create Resume row with NO parsedData.
    */
@@ -203,7 +203,7 @@ export class ResumeService {
    */
   async saveParsedData(
     resumeId: string,
-    parsed: ParsedResumeData,
+    parsed: ResumeData,
     db: Db = this.db,
   ) {
     const extractedSkills = Array.from(
@@ -342,9 +342,9 @@ export class ResumeService {
   }
 
   private buildAutofillResponse(
-    parsed: ParsedResumeData,
+    parsed: ResumeData,
   ): ResumeParsePreviewDto {
-    const basics = parsed.basics ?? ({} as ParsedResumeData['basics']);
+    const basics = parsed.basics ?? ({} as ResumeData['basics']);
     const fullName = this.normalizeText(basics.fullName) ?? 'Unknown';
     const { firstName, lastName } = this.splitName(fullName);
 
@@ -399,7 +399,7 @@ export class ResumeService {
   }
 
   private mapEducation(
-    educationList: ParsedResumeData['education'],
+    educationList: ResumeData['education'],
   ): AutofillEducationDto[] {
     if (!Array.isArray(educationList)) return [];
 
@@ -414,7 +414,7 @@ export class ResumeService {
   }
 
   private mapExperience(
-    experienceList: ParsedResumeData['experience'],
+    experienceList: ResumeData['experience'],
   ): AutofillExperienceDto[] {
     if (!Array.isArray(experienceList)) return [];
 
@@ -429,7 +429,7 @@ export class ResumeService {
   }
 
   private extractSkills(
-    skills: ParsedResumeData['skills'],
+    skills: ResumeData['skills'],
   ): AutofillSkillDto[] {
     if (!Array.isArray(skills)) return [];
 

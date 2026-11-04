@@ -1,23 +1,27 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
+import { Injectable, Logger } from '@nestjs/common';
 import { MatchRecommendation, SkillImportance } from '@prisma/client';
 import { DatabaseService } from '../../database/database.service';
-import { FASTAPI_ENDPOINTS } from '../../common/constants/fastapi.constants';
+import { FastApiService } from '../../common/fastapi/fastapi.service';
+import type {
+  RankRequest,
+  FieldScores,
+  JobRequirements,
+  ResumeData,
+} from '../../common/fastapi/contracts';
 import {
   RANKING_WEIGHTS,
   RECOMMENDATION_THRESHOLDS,
   EDUCATION_QUALIFICATION_TEXT,
   EXPERIENCE_QUALIFICATION_TEXT,
 } from './ranking.constants';
-import axios from 'axios';
-import {
-  RankApiRequest,
-  RankApiResponse,
-  FieldScores,
-  JobRequirementsPayload,
-  ResumeDataPayload,
-} from './ranking-api.interface';
+
+type JobForRanking = {
+  title: string;
+  description: string;
+  educationLevel: keyof typeof EDUCATION_QUALIFICATION_TEXT;
+  experienceLevel: keyof typeof EXPERIENCE_QUALIFICATION_TEXT;
+  jobSkills: { importance: SkillImportance; skill: { name: string } }[];
+};
 
 @Injectable()
 export class RankingService {
@@ -25,23 +29,17 @@ export class RankingService {
 
   constructor(
     private readonly db: DatabaseService,
-    private readonly http: HttpService,
+    private readonly fastApi: FastApiService,
   ) {}
 
-  private buildJobPayload(job: {
-    title: string;
-    description: string;
-    educationLevel: keyof typeof EDUCATION_QUALIFICATION_TEXT;
-    experienceLevel: keyof typeof EXPERIENCE_QUALIFICATION_TEXT;
-    jobSkills: { importance: SkillImportance; skill: { name: string } }[];
-  }): JobRequirementsPayload {
+  private buildJobPayload(job: JobForRanking): JobRequirements {
     const requiredSkills = job.jobSkills
       .filter((js) => js.importance === SkillImportance.REQUIRED)
       .map((js) => js.skill.name);
 
     return {
       title: job.title,
-      required_skills: requiredSkills,
+      requiredSkills,
       qualifications: [
         EDUCATION_QUALIFICATION_TEXT[job.educationLevel],
         EXPERIENCE_QUALIFICATION_TEXT[job.experienceLevel],
@@ -50,86 +48,30 @@ export class RankingService {
     };
   }
 
-  private buildResumePayload(parsedData: unknown): ResumeDataPayload {
-    const data = parsedData as {
-      skills?: {
-        name?: string;
-        category?: string;
-      }[];
+  private toRankResumePayload(parsedData: unknown): ResumeData {
+    if (!this.isParsedResumeData(parsedData)) {
+      throw new Error('Resume parsedData is not in ParsedResumeData shape');
+    }
+    return parsedData;
+  }
 
-      personal?: {
-        firstName?: string;
-        lastName?: string;
-        email?: string;
-        phone?: string;
-        address?: string;
-        headline?: string;
-      };
-
-      education?: {
-        degree?: string;
-        school?: string;
-        fieldOfStudy?: string;
-        startDate?: string;
-        endDate?: string;
-        grade?: string;
-      }[];
-
-      experience?: {
-        title?: string;
-        company?: string;
-        startDate?: string;
-        endDate?: string;
-        isCurrent?: boolean;
-        durationMonths?: number | null;
-        description?: string;
-        technologies?: string[];
-      }[];
-
-      projects?: unknown[];
-      certifications?: unknown[];
-      interests?: string[];
-      meta?: Record<string, unknown>;
-    };
-
-    const fullName = [data.personal?.firstName, data.personal?.lastName]
-      .filter(Boolean)
-      .join(' ');
-
-    return {
-      basics: {
-        fullName: fullName || undefined,
-        email: data.personal?.email,
-        phone: data.personal?.phone,
-        location: data.personal?.address,
-        headline: data.personal?.headline,
-      },
-
-      skills: data.skills ?? [],
-
-      education: (data.education ?? []).map((education) => ({
-        degree: education.degree,
-        field: education.fieldOfStudy,
-        institution: education.school,
-        startDate: education.startDate,
-        endDate: education.endDate,
-        grade: education.grade,
-      })),
-
-      experience: data.experience ?? [],
-
-      projects: data.projects,
-      certifications: data.certifications,
-      interests: data.interests,
-      meta: data.meta,
-    };
+  private isParsedResumeData(value: unknown): value is ResumeData {
+    if (typeof value !== 'object' || value === null) return false;
+    const candidate = value as Partial<ResumeData>;
+    return (
+      typeof candidate.basics === 'object' &&
+      candidate.basics !== null &&
+      Array.isArray(candidate.skills) &&
+      Array.isArray(candidate.education) &&
+      Array.isArray(candidate.experience)
+    );
   }
 
   private computeOverallScore(fieldScores: FieldScores): number {
     return (
-      RANKING_WEIGHTS.skills * (fieldScores.skills_score ?? 0) +
-      RANKING_WEIGHTS.experience * (fieldScores.experience_score ?? 0) +
-      RANKING_WEIGHTS.education * (fieldScores.education_score ?? 0)
+      RANKING_WEIGHTS.skills * (fieldScores.skillsScore ?? 0) +
+      RANKING_WEIGHTS.experience * (fieldScores.experienceScore ?? 0) +
+      RANKING_WEIGHTS.education * (fieldScores.educationScore ?? 0)
     );
   }
 
@@ -140,36 +82,6 @@ export class RankingService {
     return match?.label ?? MatchRecommendation.WEAK_MATCH;
   }
 
-  private async callRankingApi(
-    payload: RankApiRequest,
-  ): Promise<RankApiResponse> {
-    try {
-      const response = await firstValueFrom(
-        this.http.post<RankApiResponse>(
-          FASTAPI_ENDPOINTS.RANKING.RANK,
-          payload,
-        ),
-      );
-      return response.data;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        this.logger.error(
-          `Ranking API 422: ${JSON.stringify(error.response?.data)}`,
-        );
-      }
-      throw new BadRequestException(
-        `Failed to score resume against job: ${
-          error instanceof Error ? error.message : 'Unknown error'
-        }`,
-      );
-    }
-  }
-
-  /**
-   * Scores a single application against its job, persists a new
-   * ResumeAnalysis row, and updates Application.matchScore.
-   * Returns the jobId so the caller can trigger a re-rank for that job.
-   */
   async scoreApplication(
     applicationId: string,
   ): Promise<{ jobId: string } | null> {
@@ -216,14 +128,14 @@ export class RankingService {
       return null;
     }
 
-    const payload: RankApiRequest = {
+    const payload: RankRequest = {
       job: this.buildJobPayload(application.job),
-      resume: this.buildResumePayload(application.resume.parsedData),
+      resume: this.toRankResumePayload(application.resume.parsedData),
     };
 
-    const { field_scores } = await this.callRankingApi(payload);
+    const { fieldScores } = await this.fastApi.rank(payload);
 
-    const overallScore0to1 = this.computeOverallScore(field_scores);
+    const overallScore0to1 = this.computeOverallScore(fieldScores);
     const recommendation = this.mapToRecommendation(overallScore0to1);
     const matchScorePercent = Math.round(overallScore0to1 * 100);
 
@@ -243,16 +155,14 @@ export class RankingService {
         data: {
           applicationId,
           jobId: application.jobId,
-          skillMatchScore: Math.round((field_scores.skills_score ?? 0) * 100),
-          experienceScore: Math.round(
-            (field_scores.experience_score ?? 0) * 100,
-          ),
-          educationScore: Math.round((field_scores.education_score ?? 0) * 100),
+          skillMatchScore: Math.round((fieldScores.skillsScore ?? 0) * 100),
+          experienceScore: Math.round((fieldScores.experienceScore ?? 0) * 100),
+          educationScore: Math.round((fieldScores.educationScore ?? 0) * 100),
           overallScore: matchScorePercent,
-          matchedSkills: field_scores.matched_skills,
-          missingSkills: field_scores.missing_skills,
-          aiSummary: field_scores.ai_summary,
-          recommendation: recommendation,
+          matchedSkills: fieldScores.matchedSkills,
+          missingSkills: fieldScores.missingSkills,
+          aiSummary: fieldScores.aiSummary,
+          recommendation,
           analysisVersion: (lastAnalysis?.analysisVersion ?? 0) + 1,
           isLatest: true,
         },
@@ -267,10 +177,6 @@ export class RankingService {
     return { jobId: application.jobId };
   }
 
-  /**
-   * Recomputes rankPosition for every application under a job,
-   * ordered by matchScore descending (nulls last, i.e. unscored last).
-   */
   async recalculateRanksForJob(jobId: string): Promise<void> {
     const applications = await this.db.application.findMany({
       where: { jobId },
@@ -288,11 +194,6 @@ export class RankingService {
     );
   }
 
-  /**
-   * Entry point: score one application, then re-rank the whole job.
-   * Not meant to be awaited by the caller's response — failures are
-   * logged, never thrown, since nothing downstream is waiting on this.
-   */
   async scoreAndRankApplication(applicationId: string): Promise<void> {
     try {
       const result = await this.scoreApplication(applicationId);
