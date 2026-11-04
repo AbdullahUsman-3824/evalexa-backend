@@ -5,6 +5,7 @@ import { AuthModule } from '../auth/auth.module';
 import { RecruiterRoleGuard } from '../company/guards/recruiter-role.guard';
 import { DatabaseModule } from '../../database/database.module';
 import { InterviewService } from './services/interview.service';
+import { InterviewQuestionService } from './services/interview-question.service';
 import { PublicInterviewService } from './services/public-interview.service';
 import { InterviewController } from './controllers/interview.controller';
 import { PublicInterviewController } from './controllers/public-interview.controller';
@@ -34,6 +35,7 @@ import { UsersModule } from '../users/users.module';
   ],
   providers: [
     InterviewService,
+    InterviewQuestionService,
     PublicInterviewService,
     RecruiterRoleGuard,
     InterviewSessionGuard,
@@ -43,6 +45,6 @@ import { UsersModule } from '../users/users.module';
       useClass: ThrottlerGuard,
     },
   ],
-  exports: [InterviewService, InterviewSessionGuard],
+  exports: [InterviewService, InterviewQuestionService, InterviewSessionGuard],
 })
 export class InterviewModule {}

@@ -4,8 +4,17 @@ import { AxiosError, AxiosRequestConfig } from 'axios';
 import FormData from 'form-data';
 import { firstValueFrom } from 'rxjs';
 import { FASTAPI_ENDPOINTS } from '../constants/fastapi.constants';
-import { RankRequest, RankResponse } from './contracts/ranking.contract';
-import { ResumeParseResponse } from './contracts/resume.contract';
+import {
+  ResumeParseResponse,
+  RankRequest,
+  RankResponse,
+  QuestionGenerationRequest,
+  QuestionGenerationResponse,
+  TranscriptionRequest,
+  TranscriptionResponse,
+  EvaluationRequest,
+  EvaluationResponse,
+} from './contracts';
 
 @Injectable()
 export class FastApiService {
@@ -51,6 +60,29 @@ export class FastApiService {
     return this.postForm<ResumeParseResponse>(
       FASTAPI_ENDPOINTS.RESUME.PARSE,
       form,
+    );
+  }
+
+  generateQuestions(
+    payload: QuestionGenerationRequest,
+  ): Promise<QuestionGenerationResponse> {
+    return this.post<QuestionGenerationResponse>(
+      FASTAPI_ENDPOINTS.INTERVIEW.GENERATE_QUESTIONS,
+      payload,
+    );
+  }
+
+  transcribe(payload: TranscriptionRequest): Promise<TranscriptionResponse> {
+    return this.post<TranscriptionResponse>(
+      FASTAPI_ENDPOINTS.INTERVIEW.TRANSCRIBE,
+      payload,
+    );
+  }
+
+  evaluate(payload: EvaluationRequest): Promise<EvaluationResponse> {
+    return this.post<EvaluationResponse>(
+      FASTAPI_ENDPOINTS.INTERVIEW.EVALUATE,
+      payload,
     );
   }
 
