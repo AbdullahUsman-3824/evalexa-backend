@@ -17,6 +17,7 @@ import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { DatabaseService } from '../../../database/database.service';
 import { MailService } from '../../auth/mail.service';
 import { InterviewService } from './interview.service';
+import { QuestionGenerationProducer } from '../../processing/producers/question-generation.producer';
 
 @Injectable()
 export class PublicInterviewService {
@@ -35,6 +36,7 @@ export class PublicInterviewService {
     private readonly mailService: MailService,
     private readonly jwtService: JwtService,
     private readonly interviewService: InterviewService,
+    private readonly questionGenerationProducer: QuestionGenerationProducer,
   ) {}
 
   async requestInvitationExtension(
@@ -275,6 +277,19 @@ export class PublicInterviewService {
       },
       { expiresIn: `${this.sessionTtlSeconds}s` },
     );
+
+    try {
+      await this.questionGenerationProducer.enqueueQuestionGeneration(
+        interviewId,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to enqueue question generation for interview ${interviewId}: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+      // Do not fail the OTP response — questions can be retried later
+    }
 
     return {
       success: true,

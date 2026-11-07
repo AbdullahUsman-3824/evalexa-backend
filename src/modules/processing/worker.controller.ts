@@ -14,6 +14,7 @@ import type {
   ApplicationTaskJobData,
   JobWideTaskJobData,
 } from './interfaces/job-data.interface';
+import type { QuestionGenerationJobData } from './interfaces/job-data.interface';
 
 @Controller('worker')
 export class WorkerController {
@@ -154,6 +155,29 @@ export class WorkerController {
     } catch (error) {
       // RANKING_NOT_READY → QStash retry karega
       this.logger.warn(`close-job failed for ${body.jobId}`, error);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        error: error instanceof Error ? error.message : 'Failed',
+      });
+    }
+  }
+
+  @Post('generate-questions')
+  async generateQuestions(
+    @Req() req: Request,
+    @Body() body: QuestionGenerationJobData,
+    @Res() res: Response,
+  ) {
+    if (!(await this.verify(req))) {
+      return res
+        .status(HttpStatus.UNAUTHORIZED)
+        .json({ error: 'Invalid signature' });
+    }
+
+    try {
+      const result = await this.executor.runQuestionGeneration(body);
+      return res.status(HttpStatus.OK).json(result);
+    } catch (error) {
+      this.logger.warn(`generate-questions failed`, error);
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         error: error instanceof Error ? error.message : 'Failed',
       });

@@ -14,6 +14,8 @@ import {
   JobWideTaskJobData,
 } from '../interfaces/job-data.interface';
 import { JobStatus, ProcessingStatus } from '@prisma/client';
+import { InterviewQuestionService } from '../../interview/services/interview-question.service';
+import { QuestionGenerationJobData } from '../interfaces/job-data.interface';
 
 @Injectable()
 export class ProcessingExecutorService {
@@ -28,6 +30,7 @@ export class ProcessingExecutorService {
     private readonly candidateService: CandidateService,
     private readonly rankingService: RankingService,
     private readonly shortlistingService: ShortlistingService,
+    private readonly interviewQuestionService: InterviewQuestionService,
     private readonly qstash: QStashService,
   ) {}
 
@@ -391,6 +394,28 @@ export class ProcessingExecutorService {
     } catch (error) {
       await this.taskService.markFailed(task.id, error);
       await this.jobProcessingService.markJobWideFailed(jobId, error);
+      throw error;
+    }
+  }
+
+  // ==================== QUESTION GENERATION ====================
+  async runQuestionGeneration(data: QuestionGenerationJobData) {
+    const { interviewId } = data;
+
+    try {
+      const result =
+        await this.interviewQuestionService.generateQuestions(interviewId);
+      this.logger.log(
+        `Generated ${result.totalQuestions} questions for interview ${interviewId}`,
+      );
+      return { success: true, ...result };
+    } catch (error) {
+      this.logger.error(
+        `Question generation failed for ${interviewId}: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+      // Let BullMQ / QStash retry on transient failures
       throw error;
     }
   }

@@ -20,6 +20,9 @@ export class QStashService {
 
     @InjectQueue(QUEUE_NAMES.SCHEDULED)
     private readonly scheduledQueue: Queue,
+
+    @InjectQueue(QUEUE_NAMES.QUESTION_GENERATION)
+    private readonly questionQueue: Queue,
   ) {
     // Prefer explicit flag; fall back to NODE_ENV / VERCEL detection
     const forceQStash = process.env.USE_QSTASH === 'true';
@@ -208,5 +211,20 @@ export class QStashService {
         `MessageId is not stored yet — delayed close-job may still fire. ` +
         `(Store messageId in DB for full cancel support.)`,
     );
+  }
+
+  // ==================== INTERVIEW QUESTION GENERATION ====================
+
+  async addQuestionGeneration(data: { interviewId: string }) {
+    if (this.isLocal) {
+      return this.questionQueue.add('generate-questions', data, {
+        jobId: `generate-questions-${data.interviewId}`,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: true,
+      });
+    }
+
+    return this.publishToQStash('/worker/generate-questions', data);
   }
 }

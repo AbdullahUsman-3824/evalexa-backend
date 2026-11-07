@@ -12,6 +12,7 @@ import { PublicInterviewController } from './controllers/public-interview.contro
 import { InterviewSessionController } from './controllers/interview-session.controller';
 import { InterviewSessionGuard } from './guards/interview-session.guard';
 import { UsersModule } from '../users/users.module';
+import { ProcessingModule } from '../processing/processing.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { UsersModule } from '../users/users.module';
         limit: 20,
       },
     ]),
+    ProcessingModule,
   ],
   controllers: [
     InterviewController,

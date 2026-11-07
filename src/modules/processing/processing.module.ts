@@ -9,17 +9,20 @@ import { WorkerController } from './worker.controller';
 // Producers
 import { ApplicationProcessingProducer } from './producers/application-processing.producer';
 import { JobDeadlineProducer } from './producers/job-deadline.producer';
+import { QuestionGenerationProducer } from './producers/question-generation.producer';
 
 // Processors — single processor per queue to avoid dual-worker races
 import { ResumeAnalysisProcessor } from './processors/resume-analysis.processor';
 import { JobWideProcessor } from './processors/job-wide.processor';
 import { JobDeadlineProcessor } from './processors/job-deadline.processor';
+import { QuestionGenerationProcessor } from './processors/question-generation.processor';
 
 // Services
 import { JobProcessingService } from './services/job-processing.service';
 import { ProcessingTaskService } from './services/processing-task.service';
 import { ShortlistingService } from '../application/shortlisting.service';
 import { ProcessingExecutorService } from './services/processing-executor.service';
+import { InterviewQuestionService } from '../interview/services/interview-question.service';
 
 // Modules
 import { DatabaseModule } from '../../database/database.module';
@@ -38,6 +41,7 @@ import { RecruiterRoleGuard } from '../company/guards/recruiter-role.guard';
       { name: QUEUE_NAMES.APPLICATION_PROCESSING },
       { name: QUEUE_NAMES.JOB_PROCESSING },
       { name: QUEUE_NAMES.SCHEDULED },
+      { name: QUEUE_NAMES.QUESTION_GENERATION },
     ),
     DatabaseModule,
     RankingModule,
@@ -52,16 +56,20 @@ import { RecruiterRoleGuard } from '../company/guards/recruiter-role.guard';
     ProcessingTaskService,
     ApplicationProcessingProducer,
     JobDeadlineProducer,
+    QuestionGenerationProducer,
     ResumeAnalysisProcessor,
     JobWideProcessor,
+    QuestionGenerationProcessor,
     ShortlistingService,
     RecruiterRoleGuard,
     JobDeadlineProcessor,
     ProcessingExecutorService,
+    InterviewQuestionService,
   ],
   controllers: [ProcessingController, WorkerController],
   exports: [
     ApplicationProcessingProducer,
+    QuestionGenerationProducer,
     JobDeadlineProducer,
     JobProcessingService,
     JobDeadlineProcessor,

@@ -58,6 +58,24 @@ export class InterviewQuestionService {
       throw new NotFoundException('Interview not found');
     }
 
+    const existingCount = await this.db.interviewQuestion.count({
+      where: { interviewId },
+    });
+    const expected = QUESTION_PLAN.conceptual + QUESTION_PLAN.scenarioPractical;
+
+    if (existingCount === expected) {
+      const questions = await this.db.interviewQuestion.findMany({
+        where: { interviewId },
+        orderBy: { order: 'asc' },
+        include: { criteria: true },
+      });
+      return {
+        interviewId,
+        totalQuestions: existingCount,
+        questions,
+      };
+    }
+
     const response = await this.fastApi.generateQuestions({
       interviewId: interview.id,
       job: this.buildJobContext(interview.application.job),
@@ -67,9 +85,15 @@ export class InterviewQuestionService {
 
     this.validateResponse(response, interview.id);
 
-    await this.db.$transaction(async (tx) => {
-      await this.replaceQuestions(tx, interview.id, response.questions);
-    });
+    await this.db.$transaction(
+      async (tx) => {
+        await this.replaceQuestions(tx, interview.id, response.questions);
+      },
+      {
+        maxWait: 15_000,
+        timeout: 30_000,
+      },
+    );
 
     return {
       interviewId: interview.id,
@@ -143,23 +167,44 @@ export class InterviewQuestionService {
       where: { interviewId },
     });
 
-    for (const question of questions) {
-      await tx.interviewQuestion.create({
-        data: {
-          interviewId,
-          order: question.order,
-          category: question.category,
-          questionText: question.questionText,
-          referenceAnswer: question.referenceAnswer,
-          maxScore: question.maxScore,
-          criteria: {
-            create: question.evaluationRubric.map((criterion) => ({
-              criterion: criterion.criterion,
-              description: criterion.description,
-              maxScore: criterion.maxScore,
-            })),
+    const createdQuestions = await Promise.all(
+      questions.map((question) =>
+        tx.interviewQuestion.create({
+          data: {
+            interviewId,
+            order: question.order,
+            category: question.category,
+            questionText: question.questionText,
+            referenceAnswer: question.referenceAnswer,
+            maxScore: question.maxScore,
           },
-        },
+          select: { id: true, order: true },
+        }),
+      ),
+    );
+
+    const byOrder = new Map(
+      createdQuestions.map((q) => [q.order, q.id] as const),
+    );
+
+    const criteriaRows = questions.flatMap((question) => {
+      const questionId = byOrder.get(question.order);
+      if (!questionId) {
+        throw new BadRequestException(
+          `Missing created question for order ${question.order}`,
+        );
+      }
+      return question.evaluationRubric.map((criterion) => ({
+        questionId,
+        criterion: criterion.criterion,
+        description: criterion.description,
+        maxScore: criterion.maxScore,
+      }));
+    });
+
+    if (criteriaRows.length > 0) {
+      await tx.interviewQuestionCriterion.createMany({
+        data: criteriaRows,
       });
     }
   }
