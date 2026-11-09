@@ -143,6 +143,13 @@ enum InterviewQuestionCategory {
   SCENARIO_PRACTICAL
 }
 
+enum InterviewQuestionStatus {
+  PENDING
+  SENT
+  IN_PROGRESS
+  ANSWERED
+}
+
 enum InterviewRecommendation {
   STRONGLY_RECOMMENDED
   RECOMMENDED

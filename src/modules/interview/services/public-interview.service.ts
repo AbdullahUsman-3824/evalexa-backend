@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -10,14 +11,18 @@ import {
   ApplicationStatus,
   ExtensionRequestStatus,
   InterviewStatus,
+  InterviewQuestionStatus,
+  InterviewQuestionCategory,
   InvitationDeliveryStatus,
 } from '@prisma/client';
+import type { SubmitInterviewAnswerDto } from '../dto/submit-interview-answer.dto';
 import { hash, compare } from 'bcrypt';
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { DatabaseService } from '../../../database/database.service';
 import { MailService } from '../../auth/mail.service';
 import { InterviewService } from './interview.service';
 import { QuestionGenerationProducer } from '../../processing/producers/question-generation.producer';
+import { QuestionResponse } from '../interview.interface';
 
 @Injectable()
 export class PublicInterviewService {
@@ -313,82 +318,313 @@ export class PublicInterviewService {
   // POST /interviews/:id/start
   // ─────────────────────────────────────────────────────────────────────────
 
-  async startInterview(interviewId: string, sessionInterviewId: string) {
+  async startInterview(
+    interviewId: string,
+    sessionInterviewId: string,
+  ): Promise<QuestionResponse> {
     // Verify the session belongs to THIS interview
     if (sessionInterviewId !== interviewId) {
       throw new UnauthorizedException('Session does not match this interview');
     }
 
-    const interview = await this.db.interview.findUnique({
-      where: { id: interviewId },
-      select: {
-        id: true,
-        status: true,
-        startedAt: true,
-        language: true,
-        application: {
-          select: {
-            job: { select: { title: true } },
-            company: { select: { name: true } },
-          },
-        },
-      },
-    });
+    return this.db.$transaction(async (tx) => {
+      await this.lockInterview(tx, interviewId);
+      const interview = await tx.interview.findUnique({
+        where: { id: interviewId },
+        select: { id: true, status: true },
+      });
 
-    if (!interview) {
-      throw new NotFoundException('Interview not found');
-    }
+      if (!interview) throw new NotFoundException('Interview not found');
+      if (
+        interview.status !== InterviewStatus.PENDING &&
+        interview.status !== InterviewStatus.IN_PROGRESS
+      ) {
+        throw new BadRequestException(
+          `Interview is no longer available (status: ${interview.status})`,
+        );
+      }
 
-    if (
-      interview.status !== InterviewStatus.PENDING &&
-      interview.status !== InterviewStatus.IN_PROGRESS
-    ) {
-      throw new BadRequestException(
-        `Interview is no longer available (status: ${interview.status})`,
-      );
-    }
-
-    // Transition PENDING → IN_PROGRESS atomically
-    if (interview.status === InterviewStatus.PENDING) {
-      await this.db.interview.updateMany({
-        where: {
-          id: interviewId,
-          status: InterviewStatus.PENDING,
-        },
-        data: {
-          status: InterviewStatus.IN_PROGRESS,
-          startedAt: new Date(),
+      const questions = await tx.interviewQuestion.findMany({
+        where: { interviewId },
+        orderBy: { order: 'asc' },
+        select: {
+          id: true,
+          order: true,
+          category: true,
+          questionText: true,
+          status: true,
         },
       });
+      if (questions.length === 0) {
+        throw new BadRequestException('Interview has no questions');
+      }
+
+      if (interview.status === InterviewStatus.PENDING) {
+        const first = questions[0];
+        const now = new Date();
+        await tx.interview.update({
+          where: { id: interviewId },
+          data: { status: InterviewStatus.IN_PROGRESS, startedAt: now },
+        });
+        await tx.interviewQuestion.update({
+          where: { id: first.id },
+          data: { status: InterviewQuestionStatus.IN_PROGRESS, startedAt: now },
+        });
+        return this.questionResponse(interviewId, first);
+      }
+
+      const current = questions.find(
+        ({ status }) => status === InterviewQuestionStatus.IN_PROGRESS,
+      );
+      if (!current) {
+        throw new BadRequestException('Interview progression is invalid');
+      }
+      return this.questionResponse(interviewId, current);
+    });
+  }
+
+  async getNextQuestion(
+    interviewId: string,
+    sessionInterviewId: string,
+  ): Promise<QuestionResponse> {
+    this.assertSession(interviewId, sessionInterviewId);
+    return this.db.$transaction(async (tx) => {
+      await this.lockInterview(tx, interviewId);
+      const interview = await tx.interview.findUnique({
+        where: { id: interviewId },
+        select: { id: true, status: true },
+      });
+      if (!interview) throw new NotFoundException('Interview not found');
+      if (interview.status === InterviewStatus.COMPLETED) {
+        return this.questionResponse(interviewId, null, true);
+      }
+      if (interview.status !== InterviewStatus.IN_PROGRESS) {
+        throw new BadRequestException(
+          `Interview is not available (status: ${interview.status})`,
+        );
+      }
+
+      const questions = await tx.interviewQuestion.findMany({
+        where: { interviewId },
+        orderBy: { order: 'asc' },
+        select: {
+          id: true,
+          order: true,
+          category: true,
+          questionText: true,
+          status: true,
+          sentAt: true,
+        },
+      });
+      const currentIndex = questions.findIndex(
+        ({ status }) => status === InterviewQuestionStatus.IN_PROGRESS,
+      );
+      if (currentIndex < 0) {
+        throw new BadRequestException('Interview progression is invalid');
+      }
+      const sentQuestions = questions.filter(
+        ({ status }) => status === InterviewQuestionStatus.SENT,
+      );
+      if (sentQuestions.length >= 2) {
+        throw new ConflictException(
+          'Wait for the previous question to be submitted before requesting the next question',
+        );
+      }
+      const latestSentAt = sentQuestions.reduce<Date | null>(
+        (latest, question) =>
+          question.sentAt &&
+          (!latest || question.sentAt.getTime() > latest.getTime())
+            ? question.sentAt
+            : latest,
+        null,
+      );
+      if (latestSentAt) {
+        const cooldownRemainingMs =
+          5_000 - (Date.now() - latestSentAt.getTime());
+        if (cooldownRemainingMs > 0) {
+          throw new ConflictException(
+            `Please retry in ${Math.ceil(cooldownRemainingMs / 1000)} seconds`,
+          );
+        }
+      }
+      const next = questions
+        .slice(currentIndex + 1)
+        .find(({ status }) => status === InterviewQuestionStatus.PENDING);
+      if (!next) {
+        return this.questionResponse(interviewId, null);
+      }
+      const updated = await tx.interviewQuestion.update({
+        where: { id: next.id },
+        data: { status: InterviewQuestionStatus.SENT, sentAt: new Date() },
+        select: {
+          id: true,
+          order: true,
+          category: true,
+          questionText: true,
+        },
+      });
+      return this.questionResponse(interviewId, updated);
+    });
+  }
+
+  async submitAnswer(
+    interviewId: string,
+    questionId: string,
+    sessionInterviewId: string,
+    body: SubmitInterviewAnswerDto,
+  ) {
+    this.assertSession(interviewId, sessionInterviewId);
+    if (!body.recordings?.length) {
+      throw new BadRequestException('At least one recording is required');
+    }
+    const storageKeys = body.recordings.map(({ storageKey }) => storageKey);
+    if (new Set(storageKeys).size !== storageKeys.length) {
+      throw new BadRequestException('Recording storage keys must be unique');
     }
 
-    const current = await this.db.interview.findUniqueOrThrow({
-      where: { id: interviewId },
-      select: {
-        id: true,
-        status: true,
-        startedAt: true,
-        language: true,
-        application: {
-          select: {
-            job: { select: { title: true } },
-            company: { select: { name: true } },
+    return this.db.$transaction(async (tx) => {
+      await this.lockInterview(tx, interviewId);
+      const question = await tx.interviewQuestion.findUnique({
+        where: { id: questionId },
+        select: {
+          id: true,
+          interviewId: true,
+          order: true,
+          status: true,
+          answer: { select: { id: true } },
+        },
+      });
+      if (!question || question.interviewId !== interviewId) {
+        throw new NotFoundException('Interview question not found');
+      }
+      if (question.answer) {
+        return {
+          success: true,
+          data: { interviewId, questionId, submitted: true },
+        };
+      }
+      if (question.status !== InterviewQuestionStatus.IN_PROGRESS) {
+        throw new ConflictException('Question is not currently in progress');
+      }
+      const earlier = await tx.interviewQuestion.findFirst({
+        where: {
+          interviewId,
+          order: { lt: question.order },
+          status: { not: InterviewQuestionStatus.ANSWERED },
+        },
+        select: { id: true },
+      });
+      if (earlier) {
+        throw new ConflictException(
+          'Answers must be submitted in question order',
+        );
+      }
+      const next = await tx.interviewQuestion.findFirst({
+        where: {
+          interviewId,
+          order: { gt: question.order },
+          status: InterviewQuestionStatus.SENT,
+        },
+        orderBy: { order: 'asc' },
+        select: { id: true, status: true },
+      });
+      const pending = await tx.interviewQuestion.findFirst({
+        where: {
+          interviewId,
+          order: { gt: question.order },
+          status: InterviewQuestionStatus.PENDING,
+        },
+        select: { id: true },
+      });
+      if (!next && pending) {
+        throw new ConflictException('The next question has not been issued');
+      }
+
+      const now = new Date();
+      const answer = await tx.interviewAnswer.create({
+        data: {
+          questionId,
+          answerText: body.answerText,
+          durationSeconds: body.durationSeconds,
+          answeredAt: now,
+          recordings: {
+            create: body.recordings.map((recording) => ({
+              ...recording,
+              sizeBytes: BigInt(recording.sizeBytes),
+              uploadStatus: 'UPLOADED',
+            })),
           },
         },
-      },
+        select: { id: true },
+      });
+      await tx.interviewQuestion.update({
+        where: { id: questionId },
+        data: { status: InterviewQuestionStatus.ANSWERED, answeredAt: now },
+      });
+      if (next) {
+        await tx.interviewQuestion.update({
+          where: { id: next.id },
+          data: { status: InterviewQuestionStatus.IN_PROGRESS, startedAt: now },
+        });
+      } else if (!pending) {
+        await tx.interview.update({
+          where: { id: interviewId },
+          data: {
+            status: InterviewStatus.COMPLETED,
+            submittedAt: now,
+            completedAt: now,
+          },
+        });
+      }
+      return {
+        success: true,
+        data: {
+          interviewId,
+          questionId,
+          answerId: answer.id,
+          submitted: true,
+          isCompleted: !next && !pending,
+        },
+      };
     });
+  }
 
+  private assertSession(interviewId: string, sessionInterviewId: string): void {
+    if (sessionInterviewId !== interviewId) {
+      throw new UnauthorizedException('Session does not match this interview');
+    }
+  }
+
+  private async lockInterview(
+    transaction: Parameters<Parameters<DatabaseService['$transaction']>[0]>[0],
+    interviewId: string,
+  ): Promise<void> {
+    await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${interviewId}))`;
+  }
+
+  private questionResponse(
+    interviewId: string,
+    question: {
+      id: string;
+      order: number;
+      category: InterviewQuestionCategory;
+      questionText: string;
+    } | null,
+    isCompleted = false,
+  ): QuestionResponse {
     return {
       success: true,
       data: {
-        interview: {
-          id: current.id,
-          status: current.status,
-          startedAt: current.startedAt,
-          language: current.language,
-          jobTitle: current.application.job.title,
-          companyName: current.application.company.name,
-        },
+        interviewId,
+        question: question
+          ? {
+              id: question.id,
+              order: question.order,
+              category: question.category,
+              questionText: question.questionText,
+            }
+          : null,
+        isCompleted,
       },
     };
   }

@@ -64,17 +64,22 @@ model InterviewQuestion {
 
   maxScore Decimal @db.Decimal(8, 2)
 
+  // Question progression
+  status     InterviewQuestionStatus @default(PENDING)
+  sentAt     DateTime?               @db.Timestamptz(6)
+  startedAt  DateTime?               @db.Timestamptz(6)
+  answeredAt DateTime?               @db.Timestamptz(6)
+
   // Relations
   interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
 
   criteria InterviewQuestionCriterion[]
-
-  answer InterviewAnswer?
+  answer   InterviewAnswer?
 
   createdAt DateTime @default(now()) @db.Timestamptz(6)
 
   @@unique([interviewId, order])
-  @@index([interviewId])
+  @@index([interviewId, status])
   @@index([category])
 }
 
