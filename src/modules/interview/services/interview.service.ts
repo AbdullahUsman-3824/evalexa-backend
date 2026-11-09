@@ -42,6 +42,10 @@ export class InterviewService {
       where: {
         companyId,
         status: ApplicationStatus.INTERVIEW,
+        OR: [
+          { interviews: { none: {} } },
+          { interviews: { every: { status: InterviewStatus.PENDING } } },
+        ],
       },
       orderBy: { updatedAt: 'desc' },
       select: {
@@ -54,6 +58,7 @@ export class InterviewService {
         },
         job: {
           select: {
+            id: true,
             title: true,
           },
         },
@@ -102,6 +107,7 @@ export class InterviewService {
         return {
           id: application.id,
           interviewId: interview.id,
+          jobId: application.job.id,
           candidateName: application.candidate.fullName,
           candidateEmail: application.candidate.email,
           jobTitle: application.job.title,

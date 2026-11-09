@@ -21,6 +21,7 @@ ordered by most recently updated. An interview record is created with
     {
       "id": "application-uuid",
       "interviewId": "interview-uuid",
+      "jobId": "job-uuid",
       "candidateName": "Jane Doe",
       "candidateEmail": "jane@example.com",
       "jobTitle": "Senior Software Engineer",
