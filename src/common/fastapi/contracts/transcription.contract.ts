@@ -2,13 +2,6 @@ export enum AnswerStatus {
   COMPLETED = 'COMPLETED',
   FAILED = 'FAILED',
   EMPTY_AUDIO = 'EMPTY_AUDIO',
-  UNINTELLIGIBLE = 'UNINTELLIGIBLE',
-}
-
-export enum InterviewTranscriptionStatus {
-  COMPLETED = 'COMPLETED',
-  PARTIALLY_COMPLETED = 'PARTIALLY_COMPLETED',
-  FAILED = 'FAILED',
 }
 
 export enum TranscriptionErrorCode {
@@ -16,7 +9,6 @@ export enum TranscriptionErrorCode {
   DOWNLOAD_FAILED = 'DOWNLOAD_FAILED',
   UNSUPPORTED_FORMAT = 'UNSUPPORTED_FORMAT',
   EMPTY_AUDIO = 'EMPTY_AUDIO',
-  UNINTELLIGIBLE = 'UNINTELLIGIBLE',
   AUDIO_TOO_LARGE = 'AUDIO_TOO_LARGE',
   AUDIO_TOO_LONG = 'AUDIO_TOO_LONG',
   PROVIDER_ERROR = 'PROVIDER_ERROR',
@@ -32,6 +24,7 @@ export const SUPPORTED_MIME_TYPES = [
   'video/webm',
   'audio/wav',
   'audio/mpeg',
+  'audio/mp3',
   'audio/mp4',
   'video/mp4',
   'audio/ogg',
@@ -49,9 +42,8 @@ export interface AnswerRecording {
 }
 
 export interface TranscriptionRequest {
-  interviewId: string;
   language?: string | null; // BCP-47 like 'en', 'ur', 'zh-tw'. Omit to auto-detect
-  answers: AnswerRecording[]; // 1 to 50 items, unique questionId
+  answer: AnswerRecording; // single answer per request (matches Python)
 }
 
 export interface TranscriptionError {
@@ -69,7 +61,5 @@ export interface AnswerTranscriptionResult {
 }
 
 export interface TranscriptionResponse {
-  interviewId: string;
-  status: InterviewTranscriptionStatus;
-  results: AnswerTranscriptionResult[];
+  result: AnswerTranscriptionResult;
 }

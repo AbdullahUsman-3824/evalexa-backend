@@ -625,7 +625,9 @@ export class PublicInterviewService {
           answeredAt: now,
           recording: {
             create: {
-              type: RecordingType.AUDIO,
+              type: body.mimeType.startsWith('video/')
+                ? RecordingType.VIDEO
+                : RecordingType.AUDIO,
               storageKey,
               mimeType: body.mimeType,
               sizeBytes: BigInt(body.sizeBytes),

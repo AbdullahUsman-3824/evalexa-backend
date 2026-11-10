@@ -1,4 +1,5 @@
-import { IsInt, IsNotEmpty, IsString, Min } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsString, Min } from 'class-validator';
+import { SUPPORTED_MIME_TYPES } from '../../../common/fastapi/contracts';
 
 export class SubmitInterviewAnswerDto {
   @IsInt()
@@ -10,7 +11,7 @@ export class SubmitInterviewAnswerDto {
   storageKey!: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsIn(SUPPORTED_MIME_TYPES)
   mimeType!: string;
 
   @IsInt()

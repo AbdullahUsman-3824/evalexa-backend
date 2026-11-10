@@ -58,7 +58,22 @@ export class SupabaseService implements OnModuleInit {
       token: data.token,
     };
   }
-  
+
+  async createSignedDownloadUrl(filePath: string, expiresInSeconds: number) {
+    const { data, error } = await this.getClient()
+      .storage.from('interview-audios')
+      .createSignedUrl(filePath, expiresInSeconds);
+
+    if (error) {
+      throw new Error(`Failed to generate download URL: ${error.message}`);
+    }
+
+    return {
+      path: filePath,
+      signedUrl: data.signedUrl,
+    };
+  }
+
   async fileExists(filePath: string): Promise<boolean> {
     const { data, error } = await this.getClient()
       .storage.from('interview-audios')
