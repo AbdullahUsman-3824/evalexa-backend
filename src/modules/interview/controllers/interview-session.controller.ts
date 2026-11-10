@@ -8,7 +8,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import type { Request } from 'express';
 import {
   InterviewSessionGuard,
   InterviewSessionPayload,
@@ -27,7 +27,6 @@ export class InterviewSessionController {
     private readonly publicInterviewService: PublicInterviewService,
   ) {}
 
-  // POST /interviews/:id/start
   @Post(':id/start')
   start(
     @Param('id', ParseUUIDPipe) interviewId: string,
@@ -46,6 +45,19 @@ export class InterviewSessionController {
   ) {
     return this.publicInterviewService.getNextQuestion(
       interviewId,
+      request.interviewSession.sub,
+    );
+  }
+
+  @Post(':id/questions/:questionId/recording/upload-url')
+  generateRecordingUploadUrl(
+    @Param('id', ParseUUIDPipe) interviewId: string,
+    @Param('questionId', ParseUUIDPipe) questionId: string,
+    @Req() request: InterviewSessionRequest,
+  ) {
+    return this.publicInterviewService.generateRecordingUploadUrl(
+      interviewId,
+      questionId,
       request.interviewSession.sub,
     );
   }

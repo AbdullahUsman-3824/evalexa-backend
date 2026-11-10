@@ -15,6 +15,7 @@ export class SupabaseService implements OnModuleInit {
     { name: 'company-logos', public: true },
     { name: 'company-banners', public: true },
     { name: 'company-verification-docs', public: false },
+    { name: 'interview-audios', public: false },
   ];
 
   async onModuleInit(): Promise<void> {
@@ -40,6 +41,36 @@ export class SupabaseService implements OnModuleInit {
     }
 
     return this.supabase;
+  }
+
+  async createSignedUploadUrl(filePath: string) {
+    const { data, error } = await this.getClient()
+      .storage.from('interview-audios')
+      .createSignedUploadUrl(filePath);
+
+    if (error) {
+      throw new Error(`Failed to generate upload URL: ${error.message}`);
+    }
+
+    return {
+      path: filePath,
+      signedUrl: data.signedUrl,
+      token: data.token,
+    };
+  }
+  
+  async fileExists(filePath: string): Promise<boolean> {
+    const { data, error } = await this.getClient()
+      .storage.from('interview-audios')
+      .list(filePath.substring(0, filePath.lastIndexOf('/')), {
+        search: filePath.split('/').pop(),
+      });
+
+    if (error) {
+      throw new Error(`Failed to verify uploaded file: ${error.message}`);
+    }
+
+    return data.some((file) => file.name === filePath.split('/').pop());
   }
 
   private async ensureRequiredBuckets(): Promise<void> {

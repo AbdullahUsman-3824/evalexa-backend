@@ -161,7 +161,7 @@ model InterviewAnswer {
   // Relations
   question InterviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
-  recordings InterviewRecording[]
+  recording InterviewRecording?
 
   evaluation InterviewAnswerEvaluation?
 
@@ -177,7 +177,7 @@ model InterviewAnswer {
 
 model InterviewRecording {
   id       String @id @default(uuid()) @db.Uuid
-  answerId String @db.Uuid
+  answerId String @unique @db.Uuid
 
   type RecordingType
 
@@ -199,7 +199,6 @@ model InterviewRecording {
 
   createdAt DateTime @default(now()) @db.Timestamptz(6)
 
-  @@index([answerId])
   @@index([uploadStatus])
 }
 

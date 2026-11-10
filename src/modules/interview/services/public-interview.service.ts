@@ -14,11 +14,19 @@ import {
   InterviewQuestionStatus,
   InterviewQuestionCategory,
   InvitationDeliveryStatus,
+  RecordingType,
+  RecordingUploadStatus,
 } from '@prisma/client';
 import type { SubmitInterviewAnswerDto } from '../dto/submit-interview-answer.dto';
 import { hash, compare } from 'bcrypt';
-import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
+import {
+  createHash,
+  randomInt,
+  randomUUID,
+  timingSafeEqual,
+} from 'node:crypto';
 import { DatabaseService } from '../../../database/database.service';
+import { SupabaseService } from '../../../database/supabase.service';
 import { MailService } from '../../auth/mail.service';
 import { InterviewService } from './interview.service';
 import { QuestionGenerationProducer } from '../../processing/producers/question-generation.producer';
@@ -38,6 +46,7 @@ export class PublicInterviewService {
 
   constructor(
     private readonly db: DatabaseService,
+    private readonly supabaseService: SupabaseService,
     private readonly mailService: MailService,
     private readonly jwtService: JwtService,
     private readonly interviewService: InterviewService,
@@ -467,6 +476,54 @@ export class PublicInterviewService {
     });
   }
 
+  async generateRecordingUploadUrl(
+    interviewId: string,
+    questionId: string,
+    sessionInterviewId: string,
+  ) {
+    this.assertSession(interviewId, sessionInterviewId);
+
+    return this.db.$transaction(async (tx) => {
+      await this.lockInterview(tx, interviewId);
+      const interview = await tx.interview.findUnique({
+        where: { id: interviewId },
+        select: { id: true, status: true },
+      });
+
+      if (!interview) {
+        throw new NotFoundException('Interview not found');
+      }
+      if (interview.status !== InterviewStatus.IN_PROGRESS) {
+        throw new BadRequestException(
+          `Interview is not available (status: ${interview.status})`,
+        );
+      }
+
+      const question = await tx.interviewQuestion.findUnique({
+        where: { id: questionId },
+        select: { id: true, interviewId: true, status: true },
+      });
+      if (!question || question.interviewId !== interviewId) {
+        throw new NotFoundException('Interview question not found');
+      }
+      if (question.status !== InterviewQuestionStatus.IN_PROGRESS) {
+        throw new ConflictException('Question is not currently in progress');
+      }
+
+      const path = `${interviewId}/${questionId}/${randomUUID()}.audio`;
+      const upload = await this.supabaseService.createSignedUploadUrl(path);
+
+      return {
+        success: true,
+        data: {
+          uploadUrl: upload.signedUrl,
+          storagePath: upload.path,
+          token: upload.token,
+        },
+      };
+    });
+  }
+
   async submitAnswer(
     interviewId: string,
     questionId: string,
@@ -474,12 +531,32 @@ export class PublicInterviewService {
     body: SubmitInterviewAnswerDto,
   ) {
     this.assertSession(interviewId, sessionInterviewId);
-    if (!body.recordings?.length) {
-      throw new BadRequestException('At least one recording is required');
+    const storageKey = body.storageKey;
+
+    const expectedPathPrefix = `${interviewId}/${questionId}/`;
+
+    if (
+      !storageKey.startsWith(expectedPathPrefix) ||
+      storageKey.slice(expectedPathPrefix.length).length === 0 ||
+      storageKey.includes('..')
+    ) {
+      throw new BadRequestException('Recording storage key is invalid');
     }
-    const storageKeys = body.recordings.map(({ storageKey }) => storageKey);
-    if (new Set(storageKeys).size !== storageKeys.length) {
-      throw new BadRequestException('Recording storage keys must be unique');
+
+    let exists: boolean;
+    try {
+      exists = await this.supabaseService.fileExists(storageKey);
+    } catch (error: unknown) {
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'Failed to verify uploaded recording',
+      );
+    }
+    if (!exists) {
+      throw new BadRequestException(
+        `Uploaded recording was not found: ${storageKey}`,
+      );
     }
 
     return this.db.$transaction(async (tx) => {
@@ -544,15 +621,17 @@ export class PublicInterviewService {
       const answer = await tx.interviewAnswer.create({
         data: {
           questionId,
-          answerText: body.answerText,
           durationSeconds: body.durationSeconds,
           answeredAt: now,
-          recordings: {
-            create: body.recordings.map((recording) => ({
-              ...recording,
-              sizeBytes: BigInt(recording.sizeBytes),
-              uploadStatus: 'UPLOADED',
-            })),
+          recording: {
+            create: {
+              type: RecordingType.AUDIO,
+              storageKey,
+              mimeType: body.mimeType,
+              sizeBytes: BigInt(body.sizeBytes),
+              durationSeconds: body.durationSeconds,
+              uploadStatus: RecordingUploadStatus.UPLOADED,
+            },
           },
         },
         select: { id: true },
