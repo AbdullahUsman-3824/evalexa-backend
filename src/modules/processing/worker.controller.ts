@@ -13,8 +13,10 @@ import { ProcessingExecutorService } from './services/processing-executor.servic
 import type {
   ApplicationTaskJobData,
   JobWideTaskJobData,
+  QuestionGenerationJobData,
+  AnswerTranscriptionJobData,
+  AnswerEvaluationJobData,
 } from './interfaces/job-data.interface';
-import type { QuestionGenerationJobData } from './interfaces/job-data.interface';
 
 @Controller('worker')
 export class WorkerController {
@@ -178,6 +180,52 @@ export class WorkerController {
       return res.status(HttpStatus.OK).json(result);
     } catch (error) {
       this.logger.warn(`generate-questions failed`, error);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        error: error instanceof Error ? error.message : 'Failed',
+      });
+    }
+  }
+
+  @Post('transcribe-answer')
+  async transcribeAnswer(
+    @Req() req: Request,
+    @Body() body: AnswerTranscriptionJobData,
+    @Res() res: Response,
+  ) {
+    if (!(await this.verify(req))) {
+      return res
+        .status(HttpStatus.UNAUTHORIZED)
+        .json({ error: 'Invalid signature' });
+    }
+
+    try {
+      const result = await this.executor.runAnswerTranscription(body);
+      return res.status(HttpStatus.OK).json(result);
+    } catch (error) {
+      this.logger.warn(`transcribe-answer failed`, error);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        error: error instanceof Error ? error.message : 'Failed',
+      });
+    }
+  }
+
+  @Post('evaluate-answer')
+  async evaluateAnswer(
+    @Req() req: Request,
+    @Body() body: AnswerEvaluationJobData,
+    @Res() res: Response,
+  ) {
+    if (!(await this.verify(req))) {
+      return res
+        .status(HttpStatus.UNAUTHORIZED)
+        .json({ error: 'Invalid signature' });
+    }
+
+    try {
+      const result = await this.executor.runAnswerEvaluation(body);
+      return res.status(HttpStatus.OK).json(result);
+    } catch (error) {
+      this.logger.warn(`evaluate-answer failed`, error);
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         error: error instanceof Error ? error.message : 'Failed',
       });

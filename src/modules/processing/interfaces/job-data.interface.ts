@@ -13,3 +13,13 @@ export interface JobWideTaskJobData {
 export interface QuestionGenerationJobData {
   interviewId: string;
 }
+
+export interface AnswerTranscriptionJobData {
+  interviewId: string;
+  questionId: string;
+}
+
+export interface AnswerEvaluationJobData {
+  interviewId: string;
+  questionId: string;
+}

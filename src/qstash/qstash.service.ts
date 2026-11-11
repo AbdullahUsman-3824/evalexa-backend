@@ -23,6 +23,9 @@ export class QStashService {
 
     @InjectQueue(QUEUE_NAMES.QUESTION_GENERATION)
     private readonly questionQueue: Queue,
+
+    @InjectQueue(QUEUE_NAMES.INTERVIEW_ANSWER_PROCESSING)
+    private readonly interviewAnswerQueue: Queue,
   ) {
     // Prefer explicit flag; fall back to NODE_ENV / VERCEL detection
     const forceQStash = process.env.USE_QSTASH === 'true';
@@ -226,5 +229,36 @@ export class QStashService {
     }
 
     return this.publishToQStash('/worker/generate-questions', data);
+  }
+
+  // ==================== INTERVIEW ANSWER TRANSCRIPTION / EVALUATION ====================
+
+  async addAnswerTranscription(data: {
+    interviewId: string;
+    questionId: string;
+  }) {
+    if (this.isLocal) {
+      return this.interviewAnswerQueue.add('transcribe-answer', data, {
+        jobId: `transcribe-answer-${data.interviewId}-${data.questionId}`,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: true,
+      });
+    }
+
+    return this.publishToQStash('/worker/transcribe-answer', data);
+  }
+
+  async addAnswerEvaluation(data: { interviewId: string; questionId: string }) {
+    if (this.isLocal) {
+      return this.interviewAnswerQueue.add('evaluate-answer', data, {
+        jobId: `evaluate-answer-${data.interviewId}-${data.questionId}`,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: true,
+      });
+    }
+
+    return this.publishToQStash('/worker/evaluate-answer', data);
   }
 }

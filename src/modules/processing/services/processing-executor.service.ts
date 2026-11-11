@@ -12,10 +12,14 @@ import { QStashService } from '../../../qstash/qstash.service';
 import {
   ApplicationTaskJobData,
   JobWideTaskJobData,
+  QuestionGenerationJobData,
+  AnswerTranscriptionJobData,
+  AnswerEvaluationJobData,
 } from '../interfaces/job-data.interface';
 import { JobStatus, ProcessingStatus } from '@prisma/client';
 import { InterviewQuestionService } from '../../interview/services/interview-question.service';
-import { QuestionGenerationJobData } from '../interfaces/job-data.interface';
+import { InterviewTranscriptionService } from '../../interview/services/interview-transcription.service';
+import { InterviewEvaluationService } from '../../interview/services/interview-evaluation.service';
 
 @Injectable()
 export class ProcessingExecutorService {
@@ -31,6 +35,8 @@ export class ProcessingExecutorService {
     private readonly rankingService: RankingService,
     private readonly shortlistingService: ShortlistingService,
     private readonly interviewQuestionService: InterviewQuestionService,
+    private readonly interviewTranscriptionService: InterviewTranscriptionService,
+    private readonly interviewEvaluationService: InterviewEvaluationService,
     private readonly qstash: QStashService,
   ) {}
 
@@ -47,7 +53,17 @@ export class ProcessingExecutorService {
     if (
       msg.includes('not found') ||
       msg.includes('not yet parsed') ||
-      msg.includes('application or resume file not found')
+      msg.includes('application or resume file not found') ||
+      msg.includes('already in progress') ||
+      msg.includes('is in progress') ||
+      msg.includes('unsupported') ||
+      msg.includes('no recording') ||
+      msg.includes('not uploaded') ||
+      msg.includes('has not completed') ||
+      msg.includes('no evaluation criteria') ||
+      msg.includes('no answer exists') ||
+      msg.includes('invalid transcription') ||
+      msg.includes('invalid evaluation')
     ) {
       return false;
     }
@@ -417,6 +433,76 @@ export class ProcessingExecutorService {
       );
       // Let BullMQ / QStash retry on transient failures
       throw error;
+    }
+  }
+
+  // ==================== ANSWER TRANSCRIPTION ====================
+  async runAnswerTranscription(data: AnswerTranscriptionJobData) {
+    const { interviewId, questionId } = data;
+
+    try {
+      const result = await this.interviewTranscriptionService.transcribeAnswer(
+        interviewId,
+        questionId,
+      );
+      this.logger.log(
+        `Transcribed answer for interview ${interviewId} question ${questionId} (status=${result.data.status})`,
+      );
+
+      // Chain → evaluation (transcript may be null / FAILED status; evaluation service allows that)
+      try {
+        await this.qstash.addAnswerEvaluation({ interviewId, questionId });
+      } catch (enqueueError) {
+        this.logger.error(
+          `Failed to enqueue evaluation after transcription for ${interviewId}/${questionId}: ${
+            enqueueError instanceof Error ? enqueueError.message : enqueueError
+          }`,
+        );
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Answer transcription failed for ${interviewId}/${questionId}: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+      if (this.isTransientError(error)) {
+        throw error;
+      }
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  // ==================== ANSWER EVALUATION ====================
+  async runAnswerEvaluation(data: AnswerEvaluationJobData) {
+    const { interviewId, questionId } = data;
+
+    try {
+      const result = await this.interviewEvaluationService.evaluateAnswer(
+        interviewId,
+        questionId,
+      );
+      this.logger.log(
+        `Evaluated answer for interview ${interviewId} question ${questionId} (status=${result.data.status})`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Answer evaluation failed for ${interviewId}/${questionId}: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+      if (this.isTransientError(error)) {
+        throw error;
+      }
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 

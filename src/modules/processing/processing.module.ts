@@ -10,12 +10,14 @@ import { WorkerController } from './worker.controller';
 import { ApplicationProcessingProducer } from './producers/application-processing.producer';
 import { JobDeadlineProducer } from './producers/job-deadline.producer';
 import { QuestionGenerationProducer } from './producers/question-generation.producer';
+import { AnswerProcessingProducer } from './producers/answer-processing.producer';
 
 // Processors — single processor per queue to avoid dual-worker races
 import { ResumeAnalysisProcessor } from './processors/resume-analysis.processor';
 import { JobWideProcessor } from './processors/job-wide.processor';
 import { JobDeadlineProcessor } from './processors/job-deadline.processor';
 import { QuestionGenerationProcessor } from './processors/question-generation.processor';
+import { InterviewAnswerProcessor } from './processors/interview-answer.processor';
 
 // Services
 import { JobProcessingService } from './services/job-processing.service';
@@ -23,6 +25,8 @@ import { ProcessingTaskService } from './services/processing-task.service';
 import { ShortlistingService } from '../application/shortlisting.service';
 import { ProcessingExecutorService } from './services/processing-executor.service';
 import { InterviewQuestionService } from '../interview/services/interview-question.service';
+import { InterviewTranscriptionService } from '../interview/services/interview-transcription.service';
+import { InterviewEvaluationService } from '../interview/services/interview-evaluation.service';
 
 // Modules
 import { DatabaseModule } from '../../database/database.module';
@@ -42,6 +46,7 @@ import { RecruiterRoleGuard } from '../company/guards/recruiter-role.guard';
       { name: QUEUE_NAMES.JOB_PROCESSING },
       { name: QUEUE_NAMES.SCHEDULED },
       { name: QUEUE_NAMES.QUESTION_GENERATION },
+      { name: QUEUE_NAMES.INTERVIEW_ANSWER_PROCESSING },
     ),
     DatabaseModule,
     RankingModule,
@@ -57,19 +62,24 @@ import { RecruiterRoleGuard } from '../company/guards/recruiter-role.guard';
     ApplicationProcessingProducer,
     JobDeadlineProducer,
     QuestionGenerationProducer,
+    AnswerProcessingProducer,
     ResumeAnalysisProcessor,
     JobWideProcessor,
     QuestionGenerationProcessor,
+    InterviewAnswerProcessor,
     ShortlistingService,
     RecruiterRoleGuard,
     JobDeadlineProcessor,
     ProcessingExecutorService,
     InterviewQuestionService,
+    InterviewTranscriptionService,
+    InterviewEvaluationService,
   ],
   controllers: [ProcessingController, WorkerController],
   exports: [
     ApplicationProcessingProducer,
     QuestionGenerationProducer,
+    AnswerProcessingProducer,
     JobDeadlineProducer,
     JobProcessingService,
     JobDeadlineProcessor,

@@ -31,6 +31,7 @@ import { MailService } from '../../auth/mail.service';
 import { InterviewService } from './interview.service';
 import { QuestionGenerationProducer } from '../../processing/producers/question-generation.producer';
 import { QuestionResponse } from '../interview.interface';
+import { AnswerProcessingProducer } from '../../processing/producers/answer-processing.producer';
 
 @Injectable()
 export class PublicInterviewService {
@@ -51,6 +52,7 @@ export class PublicInterviewService {
     private readonly jwtService: JwtService,
     private readonly interviewService: InterviewService,
     private readonly questionGenerationProducer: QuestionGenerationProducer,
+    private readonly answerProcessingProducer: AnswerProcessingProducer,
   ) {}
 
   async requestInvitationExtension(
@@ -559,7 +561,7 @@ export class PublicInterviewService {
       );
     }
 
-    return this.db.$transaction(async (tx) => {
+    const result = await this.db.$transaction(async (tx) => {
       await this.lockInterview(tx, interviewId);
       const question = await tx.interviewQuestion.findUnique({
         where: { id: questionId },
@@ -668,6 +670,24 @@ export class PublicInterviewService {
         },
       };
     });
+
+    // Only enqueue when a new answer was created (idempotent re-submit has no answerId)
+    if (result?.data && 'answerId' in result.data && result.data.answerId) {
+      try {
+        await this.answerProcessingProducer.enqueueTranscription(
+          interviewId,
+          questionId,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to enqueue transcription for interview ${interviewId} question ${questionId}: ${
+            error instanceof Error ? error.message : error
+          }`,
+        );
+      }
+    }
+
+    return result;
   }
 
   private assertSession(interviewId: string, sessionInterviewId: string): void {

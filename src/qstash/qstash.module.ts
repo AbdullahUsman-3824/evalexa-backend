@@ -10,6 +10,7 @@ import { QUEUE_NAMES } from '../modules/processing/queues/queue-names';
       { name: QUEUE_NAMES.JOB_PROCESSING },
       { name: QUEUE_NAMES.SCHEDULED },
       { name: QUEUE_NAMES.QUESTION_GENERATION },
+      { name: QUEUE_NAMES.INTERVIEW_ANSWER_PROCESSING },
     ),
   ],
   providers: [QStashService],
