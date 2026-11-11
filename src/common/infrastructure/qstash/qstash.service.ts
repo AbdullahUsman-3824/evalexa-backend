@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Client } from '@upstash/qstash';
-import { QUEUE_NAMES } from '../modules/processing/queues/queue-names';
+import { QUEUE_NAMES } from '../../../modules/processing/queues/queue-names';
 
 @Injectable()
 export class QStashService {

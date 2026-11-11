@@ -3,7 +3,7 @@ import { ProcessingStatus, ProcessingTaskType } from '@prisma/client';
 import { JobProcessingService } from '../services/job-processing.service';
 import { ProcessingTaskService } from '../services/processing-task.service';
 import { DatabaseService } from '../../../database/database.service';
-import { QStashService } from '../../../qstash/qstash.service';
+import { QStashService } from '../../../common/infrastructure/qstash/qstash.service';
 
 @Injectable()
 export class ApplicationProcessingProducer {

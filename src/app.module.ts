@@ -18,7 +18,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { SkillsModule } from './modules/skills/skills.module';
 import { RankingModule } from './modules/ranking/ranking.module';
 import { ProcessingModule } from './modules/processing/processing.module';
-import { QStashModule } from './qstash/qstash.module';
+import { QStashModule } from './common/infrastructure/qstash/qstash.module';
 import { InterviewModule } from './modules/interview/interview.module';
 import { FastApiModule } from './common/fastapi/fastapi.module';
 

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { QStashService } from '../../../qstash/qstash.service';
+import { QStashService } from '../../../common/infrastructure/qstash/qstash.service';
 
 @Injectable()
 export class JobDeadlineProducer {

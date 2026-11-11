@@ -8,7 +8,7 @@ import { ResumeService } from '../../resume/resume.service';
 import { CandidateService } from '../../candidate/candidate.service';
 import { RankingService } from '../../ranking/ranking.service';
 import { ShortlistingService } from '../../application/shortlisting.service';
-import { QStashService } from '../../../qstash/qstash.service';
+import { QStashService } from '../../../common/infrastructure/qstash/qstash.service';
 import {
   ApplicationTaskJobData,
   JobWideTaskJobData,

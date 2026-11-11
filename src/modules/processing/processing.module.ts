@@ -35,7 +35,7 @@ import { ResumeModule } from '../resume/resume.module';
 import { CandidateModule } from '../candidate/candidate.module';
 import { UsersModule } from '../users/users.module';
 import { AuthModule } from '../auth/auth.module';
-import { QStashModule } from '../../qstash/qstash.module';
+import { QStashModule } from '../../common/infrastructure/qstash/qstash.module';
 
 import { RecruiterRoleGuard } from '../company/guards/recruiter-role.guard';
 

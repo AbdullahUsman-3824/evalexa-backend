@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { QStashService } from './qstash.service';
-import { QUEUE_NAMES } from '../modules/processing/queues/queue-names';
+import { QUEUE_NAMES } from '../../../modules/processing/queues/queue-names';
 
 @Module({
   imports: [
