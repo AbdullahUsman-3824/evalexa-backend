@@ -14,6 +14,7 @@ import { InterviewSessionGuard } from './guards/interview-session.guard';
 import { UsersModule } from '../users/users.module';
 import { ProcessingModule } from '../processing/processing.module';
 import { InterviewTranscriptionService } from './services/interview-transcription.service';
+import { InterviewEvaluationService } from './services/interview-evaluation.service';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { InterviewTranscriptionService } from './services/interview-transcriptio
     InterviewQuestionService,
     PublicInterviewService,
     InterviewTranscriptionService,
+    InterviewEvaluationService,
     RecruiterRoleGuard,
     InterviewSessionGuard,
     // Apply ThrottlerGuard to all routes in this module.

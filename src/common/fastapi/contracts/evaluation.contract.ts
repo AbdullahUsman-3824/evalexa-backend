@@ -1,4 +1,3 @@
-import { JobContext } from './job.contract';
 import { EvaluationCriterion, QuestionCategory } from './questions.contract';
 
 export enum AnswerEvaluationStatus {
@@ -6,12 +5,6 @@ export enum AnswerEvaluationStatus {
   FAILED = 'FAILED',
   NO_ANSWER = 'NO_ANSWER',
   UNINTELLIGIBLE = 'UNINTELLIGIBLE',
-}
-
-export enum InterviewEvaluationStatus {
-  COMPLETED = 'COMPLETED',
-  PARTIALLY_COMPLETED = 'PARTIALLY_COMPLETED',
-  FAILED = 'FAILED',
 }
 
 export interface AnswerToEvaluate {
@@ -26,9 +19,7 @@ export interface AnswerToEvaluate {
 }
 
 export interface EvaluationRequest {
-  interviewId: string;
-  job?: JobContext;
-  answers: AnswerToEvaluate[]; // 1 to 50 items, unique questionId
+  answer: AnswerToEvaluate;
 }
 
 export interface CriterionResult {
@@ -52,14 +43,5 @@ export interface AnswerEvaluationResult {
 }
 
 export interface EvaluationResponse {
-  interviewId: string;
-  status: InterviewEvaluationStatus;
-  totalQuestions: number;
-  evaluatedQuestions: number;
-  failedQuestions: number;
-  overallScore: number | null;
-  overallMaxScore: number | null;
-  overallPercentage: number | null;
-  overallFeedback: string;
-  results: AnswerEvaluationResult[];
+  result: AnswerEvaluationResult;
 }
