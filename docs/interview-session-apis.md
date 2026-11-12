@@ -211,7 +211,8 @@ Supported MIME types (`SUPPORTED_MIME_TYPES` in
   ("The next question has not been issued") is returned.
 - On success the question becomes `ANSWERED` and the next `SENT` question
   becomes `IN_PROGRESS`. If there is no next question and none pending, the
-  interview is marked `COMPLETED` with `submittedAt` and `completedAt` set.
+  interview is marked `COMPLETED` with `submittedAt` set. `completedAt` is set
+  later when evaluation finishes.
 - A recording row is created with type `AUDIO` or `VIDEO` (based on the MIME
   type prefix), `uploadStatus: UPLOADED`, and the supplied size and duration.
 - Transcription and evaluation are **not** triggered by this endpoint; they run

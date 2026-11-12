@@ -655,7 +655,6 @@ export class PublicInterviewService {
           data: {
             status: InterviewStatus.COMPLETED,
             submittedAt: now,
-            completedAt: now,
           },
         });
       }

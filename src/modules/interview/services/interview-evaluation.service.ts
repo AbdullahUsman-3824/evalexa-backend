@@ -17,7 +17,7 @@ import {
   EvaluationStatus,
   InterviewRecommendation,
 } from '@prisma/client';
-  
+
 @Injectable()
 export class InterviewEvaluationService {
   private readonly logger = new Logger(InterviewEvaluationService.name);
@@ -214,7 +214,10 @@ export class InterviewEvaluationService {
     const updateData: Parameters<typeof this.db.interview.update>[0]['data'] = {
       evaluationStatus: interviewStatus,
     };
-    if (interviewStatus === EvaluationStatus.COMPLETED) {
+    if (
+      interviewStatus === EvaluationStatus.COMPLETED ||
+      interviewStatus === EvaluationStatus.PARTIALLY_COMPLETED
+    ) {
       const summary = await this.computeInterviewSummary(interviewId);
       updateData.overallScore = summary.overallScore;
       updateData.overallMaxScore = summary.overallMaxScore;
@@ -223,7 +226,10 @@ export class InterviewEvaluationService {
       updateData.recommendation = this.toRecommendation(
         summary.overallPercentage,
       );
-      updateData.evaluatedAt = new Date();
+      const now = new Date();
+      updateData.evaluatedAt = now;
+      // Pipeline finished (fully or partially) — mark interview complete for recruiters
+      updateData.completedAt = now;
     }
     await this.db.interview.update({
       where: { id: interviewId },

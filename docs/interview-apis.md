@@ -42,6 +42,66 @@ invitation expires, its status is updated to `EXPIRED`.
 
 ---
 
+## 1b. Get interview results
+
+`GET /interviews/results`
+
+Returns interviews for the recruiter's company whose status is `IN_PROGRESS` or
+`COMPLETED` (candidate has started or finished answering). No interview records
+are created. Response is shaped for a results table — not a raw DB dump.
+
+### Response `200`
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "interviewId": "interview-uuid",
+      "applicationId": "application-uuid",
+      "jobId": "job-uuid",
+      "candidateName": "Jane Doe",
+      "candidateEmail": "jane@example.com",
+      "jobTitle": "Senior Software Engineer",
+      "status": "COMPLETED",
+      "startedAt": "2026-11-10T10:00:00.000Z",
+      "submittedAt": "2026-11-10T10:45:00.000Z",
+      "completedAt": "2026-11-10T11:05:00.000Z",
+      "timeTakenSeconds": 2700,
+      "processingStatus": "ready",
+      "processingLabel": "Results ready",
+      "transcriptionStatus": "COMPLETED",
+      "evaluationStatus": "COMPLETED",
+      "scores": {
+        "overallScore": 42,
+        "overallMaxScore": 50,
+        "overallPercentage": 84
+      },
+      "feedback": null,
+      "recommendation": "RECOMMENDED",
+      "evaluatedAt": "2026-11-10T11:05:00.000Z"
+    }
+  ]
+}
+```
+
+### Field notes
+
+| Field                                    | Meaning                                                                                  |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `status`                                 | `IN_PROGRESS` (candidate still answering) or `COMPLETED` (all answers submitted)         |
+| `submittedAt`                            | When the candidate submitted the last answer                                             |
+| `completedAt`                            | When transcription + evaluation finished (null while pipeline is running)                |
+| `timeTakenSeconds`                       | `submittedAt - startedAt` in seconds, or null if either is missing                       |
+| `processingStatus`                       | `candidate_in_progress` / `transcribing` / `evaluating` / `ready` / `partial` / `failed` |
+| `scores` / `feedback` / `recommendation` | Populated only when evaluation is `COMPLETED` or `PARTIALLY_COMPLETED`; otherwise `null` |
+
+While the candidate is still answering, or after submit while AI work is
+running, use `processingStatus` / `processingLabel` in the UI instead of
+expecting scores.
+
+---
+
 ## 2. Send an interview invitation
 
 `POST /interviews/:id/invitations/send`

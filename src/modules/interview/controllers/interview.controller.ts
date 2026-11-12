@@ -34,6 +34,16 @@ export class InterviewController {
     return this.interviewService.getAllInterviewApplications(user.companyId);
   }
 
+  // GET /interviews/results
+  @Get('results')
+  getInterviewResults(@User() user: JwtPayload) {
+    if (!user.companyId) {
+      throw new BadRequestException('Recruiter must belong to a company');
+    }
+
+    return this.interviewService.getInterviewResults(user.companyId);
+  }
+
   // POST /interviews/:id/invitations/send
   @Post(':id/invitations/send')
   sendInvitation(

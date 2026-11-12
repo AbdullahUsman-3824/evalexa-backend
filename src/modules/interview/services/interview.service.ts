@@ -4,13 +4,14 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import {
   ApplicationStatus,
+  EvaluationStatus,
   ExtensionRequestStatus,
   InterviewStatus,
   InvitationDeliveryStatus,
   Prisma,
+  TranscriptionStatus,
 } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { DatabaseService } from '../../../database/database.service';
@@ -26,7 +27,6 @@ export class InterviewService {
   constructor(
     private readonly db: DatabaseService,
     private readonly mailService: MailService,
-    private readonly configService: ConfigService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -119,6 +119,211 @@ export class InterviewService {
     return {
       success: true,
       data: result,
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // GET /interviews/results
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  async getInterviewResults(companyId: string) {
+    if (!companyId) {
+      throw new BadRequestException('Recruiter must belong to a company');
+    }
+
+    const interviews = await this.db.interview.findMany({
+      where: {
+        application: { companyId },
+        status: {
+          in: [InterviewStatus.IN_PROGRESS, InterviewStatus.COMPLETED],
+        },
+      },
+      orderBy: [
+        { submittedAt: 'desc' },
+        { startedAt: 'desc' },
+        { updatedAt: 'desc' },
+      ],
+      select: {
+        id: true,
+        status: true,
+        startedAt: true,
+        submittedAt: true,
+        completedAt: true,
+        transcriptionStatus: true,
+        evaluationStatus: true,
+        overallScore: true,
+        overallMaxScore: true,
+        overallPercentage: true,
+        overallFeedback: true,
+        recommendation: true,
+        evaluatedAt: true,
+        application: {
+          select: {
+            id: true,
+            candidate: {
+              select: {
+                fullName: true,
+                email: true,
+              },
+            },
+            job: {
+              select: {
+                id: true,
+                title: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const data = interviews.map((interview) => {
+      const timeTakenSeconds =
+        interview.startedAt && interview.submittedAt
+          ? Math.max(
+              0,
+              Math.round(
+                (interview.submittedAt.getTime() -
+                  interview.startedAt.getTime()) /
+                  1000,
+              ),
+            )
+          : null;
+
+      const processing = this.deriveProcessingStatus(
+        interview.status,
+        interview.transcriptionStatus,
+        interview.evaluationStatus,
+      );
+
+      const base = {
+        interviewId: interview.id,
+        applicationId: interview.application.id,
+        jobId: interview.application.job.id,
+        candidateName: interview.application.candidate.fullName,
+        candidateEmail: interview.application.candidate.email,
+        jobTitle: interview.application.job.title,
+        status: interview.status, // IN_PROGRESS | COMPLETED
+        startedAt: interview.startedAt,
+        submittedAt: interview.submittedAt,
+        completedAt: interview.completedAt,
+        timeTakenSeconds,
+        processingStatus: processing.status,
+        processingLabel: processing.label,
+        transcriptionStatus: interview.transcriptionStatus,
+        evaluationStatus: interview.evaluationStatus,
+      };
+
+      // Scores only when evaluation has produced results
+      const evaluationReady =
+        interview.evaluationStatus === EvaluationStatus.COMPLETED ||
+        interview.evaluationStatus === EvaluationStatus.PARTIALLY_COMPLETED;
+
+      if (evaluationReady) {
+        return {
+          ...base,
+          scores: {
+            overallScore: interview.overallScore
+              ? Number(interview.overallScore)
+              : null,
+            overallMaxScore: interview.overallMaxScore
+              ? Number(interview.overallMaxScore)
+              : null,
+            overallPercentage: interview.overallPercentage
+              ? Number(interview.overallPercentage)
+              : null,
+          },
+          feedback: interview.overallFeedback,
+          recommendation: interview.recommendation,
+          evaluatedAt: interview.evaluatedAt,
+        };
+      }
+
+      return {
+        ...base,
+        scores: null,
+        feedback: null,
+        recommendation: null,
+        evaluatedAt: interview.evaluatedAt,
+      };
+    });
+
+    return {
+      success: true,
+      data,
+    };
+  }
+
+  /**
+   * Maps transcription + evaluation pipeline state into a single recruiter-facing status.
+   */
+  private deriveProcessingStatus(
+    interviewStatus: InterviewStatus,
+    transcriptionStatus: TranscriptionStatus,
+    evaluationStatus: EvaluationStatus,
+  ): { status: string; label: string } {
+    if (interviewStatus === InterviewStatus.IN_PROGRESS) {
+      return {
+        status: 'candidate_in_progress',
+        label: 'Candidate answering',
+      };
+    }
+
+    // InterviewStatus.COMPLETED — answers submitted; pipeline may still be running
+    if (
+      transcriptionStatus === TranscriptionStatus.PENDING ||
+      transcriptionStatus === TranscriptionStatus.PROCESSING
+    ) {
+      return {
+        status: 'transcribing',
+        label: 'Transcribing answers',
+      };
+    }
+
+    if (
+      evaluationStatus === EvaluationStatus.PENDING ||
+      evaluationStatus === EvaluationStatus.PROCESSING
+    ) {
+      return {
+        status: 'evaluating',
+        label: 'Evaluating answers',
+      };
+    }
+
+    if (evaluationStatus === EvaluationStatus.COMPLETED) {
+      return {
+        status: 'ready',
+        label: 'Results ready',
+      };
+    }
+
+    if (evaluationStatus === EvaluationStatus.PARTIALLY_COMPLETED) {
+      return {
+        status: 'partial',
+        label: 'Partial results',
+      };
+    }
+
+    if (
+      transcriptionStatus === TranscriptionStatus.FAILED ||
+      evaluationStatus === EvaluationStatus.FAILED
+    ) {
+      return {
+        status: 'failed',
+        label: 'Processing failed',
+      };
+    }
+
+    if (transcriptionStatus === TranscriptionStatus.PARTIALLY_COMPLETED) {
+      return {
+        status: 'transcribing_partial',
+        label: 'Partial transcription',
+      };
+    }
+
+    return {
+      status: 'unknown',
+      label: 'Unknown',
     };
   }
 
