@@ -131,6 +131,12 @@ export class InterviewService {
       throw new BadRequestException('Recruiter must belong to a company');
     }
 
+    // ── TEMP MOCK: set to false to restore real data ──────────────
+    const USE_MOCK_RESULTS = true;
+    if (USE_MOCK_RESULTS) {
+      return this.getInterviewResultsMock();
+    }
+
     const interviews = await this.db.interview.findMany({
       where: {
         application: { companyId },
@@ -718,6 +724,295 @@ export class InterviewService {
       reviewedAt: request.reviewedAt,
       reviewer: request.reviewedBy,
       decisionNote: request.decisionNote,
+    };
+  }
+
+  /** TEMP — delete or stop calling when frontend is done. */
+  private getInterviewResultsMock() {
+    const now = new Date();
+    const mins = (m: number) => new Date(now.getTime() - m * 60_000);
+
+    const row = (
+      partial: Record<string, unknown> & {
+        candidateName: string;
+        status: string;
+        processingStatus: string;
+        processingLabel: string;
+      },
+    ) => ({
+      interviewId: crypto.randomUUID(),
+      applicationId: crypto.randomUUID(),
+      jobId: crypto.randomUUID(),
+      candidateEmail: `${partial.candidateName.toLowerCase().replace(/\s+/g, '.')}@example.com`,
+      jobTitle: 'Senior Software Engineer',
+      startedAt: mins(90),
+      submittedAt: null as Date | null,
+      completedAt: null as Date | null,
+      timeTakenSeconds: null as number | null,
+      transcriptionStatus: 'PENDING',
+      evaluationStatus: 'PENDING',
+      scores: null as null | {
+        overallScore: number;
+        overallMaxScore: number;
+        overallPercentage: number;
+      },
+      feedback: null as string | null,
+      recommendation: null as string | null,
+      evaluatedAt: null as Date | null,
+      ...partial,
+    });
+
+    return {
+      success: true,
+      data: [
+        // 1. Candidate still answering
+        row({
+          jobId: 'acca937f-55fa-4699-aca8-3634cd40f465',
+          candidateName: 'Alex In Progress',
+          status: 'IN_PROGRESS',
+          processingStatus: 'candidate_in_progress',
+          processingLabel: 'Candidate answering',
+          startedAt: mins(20),
+        }),
+
+        // 2. Submitted — transcription running
+        row({
+          jobId: 'acca937f-55fa-4699-aca8-3634cd40f465',
+          candidateName: 'Sam Transcribing',
+          status: 'COMPLETED',
+          processingStatus: 'transcribing',
+          processingLabel: 'Transcribing answers',
+          submittedAt: mins(15),
+          timeTakenSeconds: 2700,
+          transcriptionStatus: 'PROCESSING',
+        }),
+
+        // 3. Transcription pending (just submitted)
+        row({
+          jobId: 'acca937f-55fa-4699-aca8-3634cd40f465',
+          candidateName: 'Jordan Pending Tx',
+          status: 'COMPLETED',
+          processingStatus: 'transcribing',
+          processingLabel: 'Transcribing answers',
+          submittedAt: mins(5),
+          timeTakenSeconds: 1800,
+          transcriptionStatus: 'PENDING',
+        }),
+
+        // 4. Transcription done — evaluation running
+        row({
+          jobId: 'acca937f-55fa-4699-aca8-3634cd40f465',
+          candidateName: 'Casey Evaluating',
+          status: 'COMPLETED',
+          processingStatus: 'evaluating',
+          processingLabel: 'Evaluating answers',
+          submittedAt: mins(40),
+          timeTakenSeconds: 3200,
+          transcriptionStatus: 'COMPLETED',
+          evaluationStatus: 'PROCESSING',
+        }),
+
+        // 5. Evaluation pending after transcription
+        row({
+          jobId: 'acca937f-55fa-4699-aca8-3634cd40f465',
+          candidateName: 'Riley Eval Pending',
+          status: 'COMPLETED',
+          processingStatus: 'evaluating',
+          processingLabel: 'Evaluating answers',
+          submittedAt: mins(50),
+          timeTakenSeconds: 2400,
+          transcriptionStatus: 'COMPLETED',
+          evaluationStatus: 'PENDING',
+        }),
+
+        // 6. Fully ready — strong recommend
+        row({
+          jobId: 'acca937f-55fa-4699-aca8-3634cd40f465',
+          candidateName: 'Taylor Ready Strong',
+          status: 'COMPLETED',
+          processingStatus: 'ready',
+          processingLabel: 'Results ready',
+          submittedAt: mins(120),
+          completedAt: mins(100),
+          timeTakenSeconds: 3600,
+          transcriptionStatus: 'COMPLETED',
+          evaluationStatus: 'COMPLETED',
+          scores: {
+            overallScore: 46,
+            overallMaxScore: 50,
+            overallPercentage: 92,
+          },
+          recommendation: 'STRONGLY_RECOMMENDED',
+          evaluatedAt: mins(100),
+          feedback: null,
+        }),
+
+        // 7. Ready — recommend
+        row({
+          jobId: 'acca937f-55fa-4699-aca8-3634cd40f465',
+          candidateName: 'Morgan Recommended',
+          status: 'COMPLETED',
+          processingStatus: 'ready',
+          processingLabel: 'Results ready',
+          submittedAt: mins(180),
+          completedAt: mins(150),
+          timeTakenSeconds: 2900,
+          transcriptionStatus: 'COMPLETED',
+          evaluationStatus: 'COMPLETED',
+          scores: {
+            overallScore: 38,
+            overallMaxScore: 50,
+            overallPercentage: 76,
+          },
+          recommendation: 'RECOMMENDED',
+          evaluatedAt: mins(150),
+        }),
+
+        // 8. Ready — neutral
+        row({
+          jobId: 'acca937f-55fa-4699-aca8-3634cd40f465',
+          candidateName: 'Quinn Neutral',
+          status: 'COMPLETED',
+          processingStatus: 'ready',
+          processingLabel: 'Results ready',
+          submittedAt: mins(200),
+          completedAt: mins(170),
+          timeTakenSeconds: 3100,
+          transcriptionStatus: 'COMPLETED',
+          evaluationStatus: 'COMPLETED',
+          scores: {
+            overallScore: 28,
+            overallMaxScore: 50,
+            overallPercentage: 56,
+          },
+          recommendation: 'NEUTRAL',
+          evaluatedAt: mins(170),
+        }),
+
+        // 9. Ready — not recommended
+        row({
+          jobId: 'acca937f-55fa-4699-aca8-3634cd40f465',
+          candidateName: 'Avery Not Rec',
+          status: 'COMPLETED',
+          processingStatus: 'ready',
+          processingLabel: 'Results ready',
+          submittedAt: mins(220),
+          completedAt: mins(190),
+          timeTakenSeconds: 2100,
+          transcriptionStatus: 'COMPLETED',
+          evaluationStatus: 'COMPLETED',
+          scores: {
+            overallScore: 18,
+            overallMaxScore: 50,
+            overallPercentage: 36,
+          },
+          recommendation: 'NOT_RECOMMENDED',
+          evaluatedAt: mins(190),
+        }),
+
+        // 10. Ready — strongly not recommended
+        row({
+          jobId: 'acca937f-55fa-4699-aca8-3634cd40f465',
+          candidateName: 'Blake Strong No',
+          status: 'COMPLETED',
+          processingStatus: 'ready',
+          processingLabel: 'Results ready',
+          submittedAt: mins(240),
+          completedAt: mins(210),
+          timeTakenSeconds: 1500,
+          transcriptionStatus: 'COMPLETED',
+          evaluationStatus: 'COMPLETED',
+          scores: {
+            overallScore: 8,
+            overallMaxScore: 50,
+            overallPercentage: 16,
+          },
+          recommendation: 'STRONGLY_NOT_RECOMMENDED',
+          evaluatedAt: mins(210),
+        }),
+
+        // 11. Partial evaluation
+        row({
+          jobId: 'acca937f-55fa-4699-aca8-3634cd40f465',
+          candidateName: 'Parker Partial',
+          status: 'COMPLETED',
+          processingStatus: 'partial',
+          processingLabel: 'Partial results',
+          submittedAt: mins(130),
+          completedAt: mins(110),
+          timeTakenSeconds: 2800,
+          transcriptionStatus: 'COMPLETED',
+          evaluationStatus: 'PARTIALLY_COMPLETED',
+          scores: {
+            overallScore: 22,
+            overallMaxScore: 40,
+            overallPercentage: 55,
+          },
+          recommendation: 'NEUTRAL',
+          evaluatedAt: mins(110),
+        }),
+
+        // 12. Transcription failed
+        row({
+          jobId: 'acca937f-55fa-4699-aca8-3634cd40f465',
+          candidateName: 'Jamie Tx Failed',
+          status: 'COMPLETED',
+          processingStatus: 'failed',
+          processingLabel: 'Processing failed',
+          submittedAt: mins(60),
+          timeTakenSeconds: 2000,
+          transcriptionStatus: 'FAILED',
+          evaluationStatus: 'PENDING',
+        }),
+
+        // 13. Evaluation failed
+        row({
+          jobId: 'acca937f-55fa-4699-aca8-3634cd40f465',
+          candidateName: 'Drew Eval Failed',
+          status: 'COMPLETED',
+          processingStatus: 'failed',
+          processingLabel: 'Processing failed',
+          submittedAt: mins(80),
+          timeTakenSeconds: 2500,
+          transcriptionStatus: 'COMPLETED',
+          evaluationStatus: 'FAILED',
+        }),
+
+        // 14. Partial transcription
+        row({
+          jobId: 'acca937f-55fa-4699-aca8-3634cd40f465',
+          candidateName: 'Cameron Tx Partial',
+          status: 'COMPLETED',
+          processingStatus: 'transcribing_partial',
+          processingLabel: 'Partial transcription',
+          submittedAt: mins(70),
+          timeTakenSeconds: 2300,
+          transcriptionStatus: 'PARTIALLY_COMPLETED',
+          evaluationStatus: 'PENDING',
+        }),
+
+        // 15. Different job title
+        row({
+          jobId: '142a5a6e-c087-4f23-b08e-eca9e89aecb8',
+          candidateName: 'Sky Other Role',
+          status: 'COMPLETED',
+          processingStatus: 'ready',
+          processingLabel: 'Results ready',
+          jobTitle: 'Product Designer',
+          submittedAt: mins(300),
+          completedAt: mins(280),
+          timeTakenSeconds: 4000,
+          transcriptionStatus: 'COMPLETED',
+          evaluationStatus: 'COMPLETED',
+          scores: {
+            overallScore: 41,
+            overallMaxScore: 50,
+            overallPercentage: 82,
+          },
+          recommendation: 'RECOMMENDED',
+          evaluatedAt: mins(280),
+        }),
+      ],
     };
   }
 }
