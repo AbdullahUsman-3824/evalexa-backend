@@ -38,6 +38,17 @@ export class InterviewSessionController {
     );
   }
 
+  @Get(':id/session')
+  getSessionInfo(
+    @Param('id', ParseUUIDPipe) interviewId: string,
+    @Req() request: InterviewSessionRequest,
+  ) {
+    return this.publicInterviewService.getSessionInfo(
+      interviewId,
+      request.interviewSession.sub,
+    );
+  }
+
   @Get(':id/questions/next')
   nextQuestion(
     @Param('id', ParseUUIDPipe) interviewId: string,

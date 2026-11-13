@@ -25,28 +25,20 @@ state.
 
 `POST /interviews/:id/start`
 
-The session must belong to the requested interview. A `PENDING` interview is
-changed to `IN_PROGRESS` and receives its `startedAt` timestamp. An already
-`IN_PROGRESS` interview is returned unchanged. The first question also moves
-to `IN_PROGRESS`.
-
-If the interview has no questions yet, `400` is returned
-("Interview has no questions").
-
 ### Response `200`
 
 ```json
 {
   "success": true,
   "data": {
-    "interview": {
-      "id": "interview-uuid",
-      "status": "IN_PROGRESS",
-      "startedAt": "2026-11-03T22:40:00.000Z",
-      "language": "en",
-      "jobTitle": "Senior Software Engineer",
-      "companyName": "Example Company"
-    }
+    "interviewId": "interview-uuid",
+    "question": {
+      "id": "question-uuid",
+      "order": 1,
+      "category": "BEHAVIORAL",
+      "questionText": "Tell me about a time when..."
+    },
+    "isCompleted": false
   }
 }
 ```
@@ -58,6 +50,51 @@ If the interview has no questions yet, `400` is returned
 | `401`  | Session missing, invalid, expired, or belongs to a different interview           |
 | `400`  | Interview no longer available (not `PENDING`/`IN_PROGRESS`), or has no questions |
 | `404`  | Interview not found                                                              |
+
+---
+
+## 1b. Get session interview info (recovery)
+
+`GET /interviews/:id/session`
+
+Session-protected recovery endpoint. Returns the core interview metadata
+(job title, company, candidate name, status, etc.) so the client can restore
+header/context information if the previous preview or verify-otp response was
+lost (page refresh, new tab, etc.).
+
+Does **not** advance interview state and does **not** return a question.
+
+### Response `200`
+
+```json
+{
+  "success": true,
+  "data": {
+    "interviewId": "interview-uuid",
+    "jobTitle": "Senior Software Engineer",
+    "companyName": "Example Company",
+    "candidateName": "Jane Doe",
+    "language": "en",
+    "status": "IN_PROGRESS",
+    "startedAt": "2026-11-03T22:40:00.000Z",
+    "canResume": true,
+    "isCompleted": false
+  }
+}
+```
+
+`canResume` is `true` only when status is `IN_PROGRESS`.  
+`isCompleted` is `true` only when status is `COMPLETED`.
+
+Allowed statuses: `PENDING`, `IN_PROGRESS`, `COMPLETED`. Any other status returns `400`.
+
+### Errors
+
+| Status | Condition                                                              |
+| ------ | ---------------------------------------------------------------------- |
+| `401`  | Session missing, invalid, expired, or belongs to a different interview |
+| `400`  | Interview status is not PENDING / IN_PROGRESS / COMPLETED              |
+| `404`  | Interview not found                                                    |
 
 ---
 

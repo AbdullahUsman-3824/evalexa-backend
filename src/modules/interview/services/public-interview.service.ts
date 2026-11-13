@@ -478,6 +478,60 @@ export class PublicInterviewService {
     });
   }
 
+  /**
+   * GET /interviews/:id/session
+   */
+  async getSessionInfo(interviewId: string, sessionInterviewId: string) {
+    this.assertSession(interviewId, sessionInterviewId);
+
+    const interview = await this.db.interview.findUnique({
+      where: { id: interviewId },
+      select: {
+        id: true,
+        status: true,
+        language: true,
+        startedAt: true,
+        application: {
+          select: {
+            candidate: { select: { fullName: true } },
+            company: { select: { name: true } },
+            job: { select: { title: true } },
+          },
+        },
+      },
+    });
+
+    if (!interview) {
+      throw new NotFoundException('Interview not found');
+    }
+
+    // Allow PENDING / IN_PROGRESS / COMPLETED so the UI can still show a summary
+    if (
+      interview.status !== InterviewStatus.PENDING &&
+      interview.status !== InterviewStatus.IN_PROGRESS &&
+      interview.status !== InterviewStatus.COMPLETED
+    ) {
+      throw new BadRequestException(
+        `Interview is no longer available (status: ${interview.status})`,
+      );
+    }
+
+    return {
+      success: true,
+      data: {
+        interviewId: interview.id,
+        jobTitle: interview.application.job.title,
+        companyName: interview.application.company.name,
+        candidateName: interview.application.candidate.fullName,
+        language: interview.language,
+        status: interview.status,
+        startedAt: interview.startedAt?.toISOString() ?? null,
+        canResume: interview.status === InterviewStatus.IN_PROGRESS,
+        isCompleted: interview.status === InterviewStatus.COMPLETED,
+      },
+    };
+  }
+
   async generateRecordingUploadUrl(
     interviewId: string,
     questionId: string,
