@@ -89,7 +89,7 @@ export class MailService {
   }): string {
     const logoBlock = companyLogo
       ? `<img src="${companyLogo}" alt="${companyName ?? 'Evalexa'}" width="40" height="40"
-            style="display:block;width:40px;height:40px;border-radius:10px;object-fit:cover;" />`
+            style="display:block;margin:0 auto;width:40px;height:40px;border-radius:10px;object-fit:cover;" />`
       : `<span style="font-family:'Syne',system-ui,sans-serif;font-size:24px;
                font-weight:800;color:${BRAND.white};letter-spacing:-0.5px;line-height:1;">
            Eval<span style="color:${BRAND.cyan};">exa</span>
@@ -97,7 +97,7 @@ export class MailService {
 
     const ctaHtml =
       ctaText && ctaLink
-        ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:32px 0 16px;">
+        ? `<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:32px auto 16px;">
              <tr>
                <td align="center" style="background-color:${BRAND.primary};border-radius:8px;">
                  <a href="${ctaLink}" target="_blank"
@@ -126,7 +126,7 @@ export class MailService {
     table, td { mso-table-lspace:0pt; mso-table-rspace:0pt; }
     img { -ms-interpolation-mode:bicubic; border:0; height:auto; line-height:100%; outline:none; text-decoration:none; }
     a { color:${BRAND.cyan}; text-decoration:none; }
-
+    
     @media screen and (max-width:600px) {
       .container { width:100% !important; }
       .px-mobile { padding-left:24px !important; padding-right:24px !important; }
@@ -144,12 +144,15 @@ export class MailService {
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:${BRAND.bgPage};">
     <tr>
       <td align="center" style="padding:48px 16px;">
-        <table role="presentation" class="container" cellpadding="0" cellspacing="0" width="600"
-               style="max-width:600px;width:100%;background-color:${BRAND.bgCard};border-radius:16px;overflow:hidden;border:1px solid ${BRAND.border};box-shadow:0 20px 40px rgba(0,0,0,0.4);">
+        
+        <!-- MAIN CONTAINER (Added align="center" and margin:0 auto) -->
+        <table role="presentation" class="container" cellpadding="0" cellspacing="0" width="600" align="center"
+               style="max-width:600px;width:100%;margin:0 auto;background-color:${BRAND.bgCard};border-radius:16px;overflow:hidden;border:1px solid ${BRAND.border};box-shadow:0 20px 40px rgba(0,0,0,0.4);">
+          
           <tr>
             <td class="px-mobile" style="padding:40px 40px 24px;text-align:center;">
-              <div style="margin-bottom:16px;">${logoBlock}</div>
-              ${companyName ? `<div style="font-size:12px;color:${BRAND.textMuted};text-transform:uppercase;letter-spacing:2px;font-weight:600;">via ${companyName}</div>` : ''}
+              <div style="margin-bottom:16px;text-align:center;">${logoBlock}</div>
+              ${companyName ? `<div style="font-size:12px;color:${BRAND.textMuted};text-transform:uppercase;letter-spacing:2px;font-weight:600;text-align:center;">via ${companyName}</div>` : ''}
             </td>
           </tr>
           <tr>
@@ -160,9 +163,11 @@ export class MailService {
                          line-height:1.1;letter-spacing:-1px;text-align:center;">
                 ${title}
               </h1>
+              
               <div style="font-size:16px;color:${BRAND.textMuted};text-align:center;">
                 ${bodyContent}
               </div>
+              
               <div style="text-align:center;">
                 ${ctaHtml}
               </div>
@@ -170,10 +175,10 @@ export class MailService {
           </tr>
           <tr>
             <td class="px-mobile" style="padding:24px 40px;background-color:${BRAND.bgNavy};border-top:1px solid ${BRAND.border};text-align:center;">
-              <p style="margin:0;font-size:13px;color:${BRAND.textMuted};">
+              <p style="margin:0;font-size:13px;color:${BRAND.textMuted};text-align:center;">
                 Powered by <a href="${this.frontendUrl}" style="color:${BRAND.cyan};font-weight:600;">Evalexa</a>
               </p>
-              <p style="margin:6px 0 0;font-size:11px;color:#64748B;">
+              <p style="margin:6px 0 0;font-size:11px;color:#64748B;text-align:center;">
                 AI-Powered Recruitment Platform
               </p>
             </td>
@@ -193,18 +198,18 @@ export class MailService {
       title: 'Verify your email',
       preheader: `Your Evalexa verification code is ${otp}.`,
       bodyContent: `
-        <p style="margin:0 0 32px;">Welcome to Evalexa. Enter the code below to confirm your email address.</p>
-        <div style="background-color:${BRAND.bgNavy};border-radius:12px;padding:32px 16px;margin:0 0 32px;">
+        <p style="margin:0 0 32px;text-align:center;">Welcome to Evalexa. Enter the code below to confirm your email address.</p>
+        <div style="background-color:${BRAND.bgNavy};border-radius:12px;padding:32px 16px;margin:0 0 32px;text-align:center;">
           <div class="otp-digits"
                style="font-family:'Syne',system-ui,sans-serif;font-size:40px;font-weight:700;
-                      color:${BRAND.white};letter-spacing:16px;line-height:1;padding-left:16px;">
+                      color:${BRAND.white};letter-spacing:16px;line-height:1;padding-left:16px;text-align:center;">
             ${otp}
           </div>
-          <div style="font-size:12px;color:${BRAND.warning};margin-top:16px;font-weight:600;letter-spacing:0.5px;">
+          <div style="font-size:12px;color:${BRAND.warning};margin-top:16px;font-weight:600;letter-spacing:0.5px;text-align:center;">
             Expires in 10 minutes
           </div>
         </div>
-        <p style="margin:0;font-size:14px;">
+        <p style="margin:0;font-size:14px;text-align:center;">
           If you didn't request this, you can safely ignore this email.
         </p>
       `,
@@ -237,18 +242,18 @@ export class MailService {
       title: 'Reset your password',
       preheader: `Your Evalexa password reset code is ${otp}.`,
       bodyContent: `
-        <p style="margin:0 0 32px;">We received a request to reset your Evalexa password. Use the code below to proceed.</p>
-        <div style="background-color:${BRAND.bgNavy};border-radius:12px;padding:32px 16px;margin:0 0 32px;">
+        <p style="margin:0 0 32px;text-align:center;">We received a request to reset your Evalexa password. Use the code below to proceed.</p>
+        <div style="background-color:${BRAND.bgNavy};border-radius:12px;padding:32px 16px;margin:0 0 32px;text-align:center;">
           <div class="otp-digits"
                style="font-family:'Syne',system-ui,sans-serif;font-size:40px;font-weight:700;
-                      color:${BRAND.white};letter-spacing:16px;line-height:1;padding-left:16px;">
+                      color:${BRAND.white};letter-spacing:16px;line-height:1;padding-left:16px;text-align:center;">
             ${otp}
           </div>
-          <div style="font-size:12px;color:${BRAND.warning};margin-top:16px;font-weight:600;letter-spacing:0.5px;">
+          <div style="font-size:12px;color:${BRAND.warning};margin-top:16px;font-weight:600;letter-spacing:0.5px;text-align:center;">
             Expires in 10 minutes
           </div>
         </div>
-        <p style="margin:0;font-size:14px;">
+        <p style="margin:0;font-size:14px;text-align:center;">
           If you didn't request a password reset, please ignore this email.
         </p>
       `,
@@ -292,12 +297,13 @@ export class MailService {
       year: 'numeric',
     });
 
+    // Fixed: Removed display:flex, used standard inline elements
     const metaBits: string[] = [];
-    if (jobLocation) metaBits.push(`📍 ${jobLocation}`);
-    if (salaryRange) metaBits.push(`💰 ${salaryRange}`);
+    if (jobLocation) metaBits.push(`${jobLocation}`);
+    if (salaryRange) metaBits.push(`${salaryRange}`);
     const metaHtml = metaBits.length
-      ? `<div style="margin-top:12px;font-size:14px;color:${BRAND.textMuted};display:flex;justify-content:center;gap:16px;">
-           ${metaBits.join(' &nbsp;·&nbsp; ')}
+      ? `<div style="margin-top:12px;font-size:14px;color:${BRAND.textMuted};text-align:center;">
+           ${metaBits.join(' &nbsp;&nbsp;·&nbsp;&nbsp; ')}
          </div>`
       : '';
 
@@ -307,20 +313,23 @@ export class MailService {
       companyName,
       companyLogo,
       bodyContent: `
-        <p style="margin:0 0 24px;font-size:18px;color:${BRAND.white};">
+        <p style="margin:0 0 24px;font-size:18px;color:${BRAND.white};text-align:center;">
           Congratulations! You have been selected to interview for:
         </p>
-        <div style="background-color:${BRAND.bgNavy};border-radius:12px;padding:24px;margin:0 0 32px;">
-          <div style="font-size:12px;color:${BRAND.cyan};font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;">
+        
+        <!-- Job Box: Ensured text-align center applies to inner elements -->
+        <div style="background-color:${BRAND.bgNavy};border-radius:12px;padding:24px;margin:0 0 32px;text-align:center;">
+          <div style="font-size:12px;color:${BRAND.cyan};font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;text-align:center;">
             ${companyName}
           </div>
-          <div style="font-family:'Syne',system-ui,sans-serif;font-size:24px;font-weight:700;color:${BRAND.white};line-height:1.3;">
+          <div style="font-family:'Syne',system-ui,sans-serif;font-size:24px;font-weight:700;color:${BRAND.white};line-height:1.3;text-align:center;">
             ${jobTitle}
           </div>
           ${metaHtml}
         </div>
-        <p style="margin:0 0 8px;">Click below to start your interview. Valid until <strong style="color:${BRAND.white};">${expiryFormatted}</strong>.</p>
-        <p style="margin:0;font-size:14px;">Make sure you're in a quiet environment with a stable connection.</p>
+        
+        <p style="margin:0 0 8px;text-align:center;">Click below to start your interview. Valid until <strong style="color:${BRAND.white};">${expiryFormatted}</strong>.</p>
+        <p style="margin:0;font-size:14px;text-align:center;">Make sure you're in a quiet environment with a stable connection.</p>
       `,
       ctaText: 'Start Interview',
       ctaLink: interviewLink,
@@ -357,34 +366,24 @@ export class MailService {
   ): Promise<void> {
     this.ensureSmtpConfiguration();
 
-    const metaBits: string[] = [];
-    if (jobLocation) metaBits.push(`📍 ${jobLocation}`);
-    if (salaryRange) metaBits.push(`💰 ${salaryRange}`);
-    const metaHtml = metaBits.length
-      ? `<div style="margin-top:12px;font-size:14px;color:${BRAND.textMuted};">
-           ${metaBits.join(' &nbsp;·&nbsp; ')}
-         </div>`
-      : '';
-
     const html = this.buildHtmlEmail({
       title: 'Interview Verification',
       preheader: `Use ${otp} to verify your identity.`,
       companyName,
       companyLogo,
       bodyContent: `
-        <p style="margin:0 0 32px;">Enter the code below to verify your identity${jobTitle ? ` and continue with your ${jobTitle} interview` : ' and continue with your interview'}.</p>
-        <div style="background-color:${BRAND.bgNavy};border-radius:12px;padding:32px 16px;margin:0 0 32px;">
+        <p style="margin:0 0 32px;text-align:center;">Enter the code below to verify your identity${jobTitle ? ` and continue with your ${jobTitle} interview` : ' and continue with your interview'}.</p>
+        <div style="background-color:${BRAND.bgNavy};border-radius:12px;padding:32px 16px;margin:0 0 32px;text-align:center;">
           <div class="otp-digits"
                style="font-family:'Syne',system-ui,sans-serif;font-size:40px;font-weight:700;
-                      color:${BRAND.white};letter-spacing:16px;line-height:1;padding-left:16px;">
+                      color:${BRAND.white};letter-spacing:16px;line-height:1;padding-left:16px;text-align:center;">
             ${otp}
           </div>
-          <div style="font-size:12px;color:${BRAND.warning};margin-top:16px;font-weight:600;letter-spacing:0.5px;">
+          <div style="font-size:12px;color:${BRAND.warning};margin-top:16px;font-weight:600;letter-spacing:0.5px;text-align:center;">
             Expires in 10 minutes
           </div>
         </div>
-        ${metaHtml}
-        <p style="margin:0;font-size:14px;">For your security, never share this code with anyone.</p>
+        <p style="margin:0;font-size:14px;text-align:center;">For your security, never share this code with anyone.</p>
       `,
     });
 
@@ -434,7 +433,7 @@ export class MailService {
     if (salaryRange) {
       detailRows.push(`
         <tr>
-          <td style="padding:12px 0;font-size:14px;color:${BRAND.textMuted};border-top:1px solid ${BRAND.border};">Salary</td>
+          <td style="padding:12px 0;font-size:14px;color:${BRAND.textMuted};border-top:1px solid ${BRAND.border};text-align:left;">Salary</td>
           <td style="padding:12px 0;font-size:14px;color:${BRAND.white};font-weight:600;border-top:1px solid ${BRAND.border};text-align:right;">
             ${salaryRange}
           </td>
@@ -443,7 +442,7 @@ export class MailService {
     if (startDate) {
       detailRows.push(`
         <tr>
-          <td style="padding:12px 0;font-size:14px;color:${BRAND.textMuted};border-top:1px solid ${BRAND.border};">Start date</td>
+          <td style="padding:12px 0;font-size:14px;color:${BRAND.textMuted};border-top:1px solid ${BRAND.border};text-align:left;">Start date</td>
           <td style="padding:12px 0;font-size:14px;color:${BRAND.white};font-weight:600;border-top:1px solid ${BRAND.border};text-align:right;">
             ${startDate}
           </td>
@@ -461,26 +460,28 @@ export class MailService {
       companyName,
       companyLogo,
       bodyContent: `
-        <p style="margin:0 0 24px;font-size:18px;color:${BRAND.white};">
+        <p style="margin:0 0 24px;font-size:18px;color:${BRAND.white};text-align:center;">
           Congratulations, <strong>${candidateName}</strong>!
         </p>
-        <p style="margin:0 0 24px;">
+        <p style="margin:0 0 24px;text-align:center;">
           We are pleased to inform you that you have been selected for the next stage of our recruitment process. Our recruitment team will contact you shortly regarding the next steps.
         </p>
 
-        <!-- Job Details Box -->
+        <!-- Job Details Box (Left Aligned by design for data readability) -->
         <div style="background-color:${BRAND.bgNavy};border-radius:12px;padding:24px;margin:0 0 32px;text-align:left;">
-          <div style="font-size:12px;color:${BRAND.success};font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;">
+          <div style="font-size:12px;color:${BRAND.success};font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;text-align:left;">
             ${companyName}
           </div>
-          <div style="font-family:'Syne',system-ui,sans-serif;font-size:24px;font-weight:700;color:${BRAND.white};line-height:1.3;">
+          <div style="font-family:'Syne',system-ui,sans-serif;font-size:24px;font-weight:700;color:${BRAND.white};line-height:1.3;text-align:left;">
             ${jobTitle}
           </div>
           ${detailsHtml}
         </div>
 
-        <p style="margin:0;">Keep an eye on your inbox for further updates from the hiring team.</p>
+        <p style="margin:0;text-align:center;">Keep an eye on your inbox for further updates from the hiring team.</p>
       `,
+      ctaText: 'View Application',
+      ctaLink: `${this.frontendUrl}/candidate/applications`,
     });
 
     try {
