@@ -6,15 +6,18 @@ import {
 } from '@nestjs/common';
 import {
   ApplicationStatus,
+  AnswerTranscriptionStatus,
   EvaluationStatus,
   ExtensionRequestStatus,
   InterviewStatus,
   InvitationDeliveryStatus,
   Prisma,
+  RecordingUploadStatus,
   TranscriptionStatus,
 } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { DatabaseService } from '../../../database/database.service';
+import { QStashService } from '../../../common/infrastructure/qstash/qstash.service';
 import { MailService } from '../../auth/mail.service';
 import type { InterviewExtensionRequestQueryDto } from '../dto/interview-extension-request.dto';
 
@@ -27,6 +30,7 @@ export class InterviewService {
   constructor(
     private readonly db: DatabaseService,
     private readonly mailService: MailService,
+    private readonly qstash: QStashService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -132,7 +136,7 @@ export class InterviewService {
     }
 
     // ── TEMP MOCK: set to false to restore real data ──────────────
-    const USE_MOCK_RESULTS = true;
+    const USE_MOCK_RESULTS = false;
     if (USE_MOCK_RESULTS) {
       return this.getInterviewResultsMock();
     }
@@ -257,6 +261,104 @@ export class InterviewService {
     return {
       success: true,
       data,
+    };
+  }
+
+  // POST /interviews/:id/processing/retry
+  async retryFailedAnswerProcessing(companyId: string, interviewId: string) {
+    const interview = await this.db.interview.findFirst({
+      where: {
+        id: interviewId,
+        application: { companyId },
+      },
+      select: {
+        id: true,
+        questions: {
+          orderBy: { order: 'asc' },
+          select: {
+            id: true,
+            answer: {
+              select: {
+                transcriptionStatus: true,
+                recording: {
+                  select: { uploadStatus: true },
+                },
+                evaluation: {
+                  select: { status: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!interview) {
+      throw new NotFoundException('Interview not found');
+    }
+
+    const transcriptionQueued: string[] = [];
+    const evaluationQueued: string[] = [];
+    const skipped: Array<{ questionId: string; reason: string }> = [];
+
+    for (const question of interview.questions) {
+      if (!question.answer) {
+        skipped.push({ questionId: question.id, reason: 'no_answer' });
+        continue;
+      }
+
+      const { answer } = question;
+      if (answer.transcriptionStatus === AnswerTranscriptionStatus.FAILED) {
+        if (
+          !answer.recording ||
+          answer.recording.uploadStatus !== RecordingUploadStatus.UPLOADED
+        ) {
+          skipped.push({
+            questionId: question.id,
+            reason: 'recording_not_uploaded',
+          });
+          continue;
+        }
+
+        await this.qstash.addAnswerTranscription({
+          interviewId,
+          questionId: question.id,
+        });
+        transcriptionQueued.push(question.id);
+        continue;
+      }
+
+      if (answer.evaluation?.status !== EvaluationStatus.FAILED) {
+        continue;
+      }
+
+      if (answer.transcriptionStatus === AnswerTranscriptionStatus.COMPLETED) {
+        await this.qstash.addAnswerEvaluation({
+          interviewId,
+          questionId: question.id,
+        });
+        evaluationQueued.push(question.id);
+      } else {
+        skipped.push({
+          questionId: question.id,
+          reason: 'evaluation_failed_but_transcript_not_ready',
+        });
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        interviewId: interview.id,
+        transcriptionQueued,
+        evaluationQueued,
+        skipped,
+        totals: {
+          transcription: transcriptionQueued.length,
+          evaluation: evaluationQueued.length,
+          skipped: skipped.length,
+        },
+      },
     };
   }
 

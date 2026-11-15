@@ -15,6 +15,7 @@ import { UsersModule } from '../users/users.module';
 import { ProcessingModule } from '../processing/processing.module';
 import { InterviewTranscriptionService } from './services/interview-transcription.service';
 import { InterviewEvaluationService } from './services/interview-evaluation.service';
+import { QStashModule } from '../../common/infrastructure/qstash/qstash.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { InterviewEvaluationService } from './services/interview-evaluation.serv
       },
     ]),
     ProcessingModule,
+    QStashModule,
   ],
   controllers: [
     InterviewController,

@@ -57,6 +57,22 @@ export class InterviewController {
     return this.interviewService.sendInvitation(user.companyId, interviewId);
   }
 
+  // POST /interviews/:id/processing/retry
+  @Post(':id/processing/retry')
+  retryFailedAnswerProcessing(
+    @User() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) interviewId: string,
+  ) {
+    if (!user.companyId) {
+      throw new BadRequestException('Recruiter must belong to a company');
+    }
+
+    return this.interviewService.retryFailedAnswerProcessing(
+      user.companyId,
+      interviewId,
+    );
+  }
+
   // GET /interviews/invitation-extension-requests
   @Get('invitation-extension-requests')
   getInvitationExtensionRequests(
