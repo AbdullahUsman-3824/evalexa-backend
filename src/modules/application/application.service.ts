@@ -25,9 +25,12 @@ import { DatabaseService } from '../../database/database.service';
 import { ResumeService } from '../resume/resume.service';
 import { UploadedResumeFileDto } from '../resume/dto/uploaded-resume-file.dto';
 import { ApplyWithParsedDto } from './dto/apply-with-parsed.dto';
+import { FindHiredQueryDto } from './dto/find-hired-query.dto';
 import { FindJobApplicationsQueryDto } from './dto/find-job-applications-query.dto';
+import { HireApplicationDto } from './dto/hire-application.dto';
 import { ShortlistListQueryDto } from './dto/shortlist-list-query.dto';
 import { ApplicationProcessingProducer } from '../processing/producers/application-processing.producer';
+import { MailService } from '../auth/mail.service';
 import type { Express } from 'express';
 
 @Injectable()
@@ -39,6 +42,7 @@ export class ApplicationService {
     private readonly resumeService: ResumeService,
     private readonly db: DatabaseService,
     private readonly applicationProcessingProducer: ApplicationProcessingProducer,
+    private readonly mailService: MailService,
   ) {}
 
   async findByCandidateAndJob(candidateId: string, jobId: string) {
@@ -186,6 +190,78 @@ export class ApplicationService {
         limit,
         total,
         totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findHired(companyId: string, query: FindHiredQueryDto = {}) {
+    if (!companyId) {
+      throw new BadRequestException(
+        'Recruiter must have a company to list hired candidates',
+      );
+    }
+
+    const page = Math.max(1, query.page ?? 1);
+    const limit = Math.min(100, Math.max(1, query.limit ?? 20));
+
+    if (query.jobId) {
+      this.assertUuid(query.jobId, 'jobId');
+      await this.requireOwnedJob(companyId, query.jobId);
+    }
+
+    const where: Prisma.ApplicationWhereInput = {
+      companyId,
+      status: ApplicationStatus.HIRED,
+      ...(query.jobId ? { jobId: query.jobId } : {}),
+    };
+
+    const [total, applications] = await Promise.all([
+      this.db.application.count({ where }),
+      this.db.application.findMany({
+        where,
+        orderBy: [{ hiredAt: 'desc' }, { appliedAt: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          status: true,
+          hiredAt: true,
+          appliedAt: true,
+          matchScore: true,
+          job: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
+          candidate: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              phone: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      success: true,
+      data: applications.map((application) => ({
+        applicationId: application.id,
+        status: application.status,
+        hiredAt: application.hiredAt,
+        appliedAt: application.appliedAt,
+        matchScore: application.matchScore,
+        job: application.job,
+        candidate: application.candidate,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
       },
     };
   }
@@ -529,6 +605,98 @@ export class ApplicationService {
           total,
           totalPages: Math.ceil(total / limit) || 1,
         },
+      },
+    };
+  }
+
+  async hireApplication(
+    companyId: string,
+    applicationId: string,
+    dto: HireApplicationDto = {},
+  ) {
+    if (!companyId) {
+      throw new BadRequestException(
+        'Recruiter must belong to a company to hire a candidate',
+      );
+    }
+
+    this.assertUuid(applicationId, 'applicationId');
+    const application = await this.findOwnedApplication(
+      applicationId,
+      companyId,
+    );
+
+    if (
+      application.status !== ApplicationStatus.INTERVIEW &&
+      application.status !== ApplicationStatus.OFFER
+    ) {
+      throw new BadRequestException(
+        `Cannot hire application in status ${application.status}`,
+      );
+    }
+
+    const updated = await this.db.application.update({
+      where: { id: applicationId },
+      data: {
+        status: ApplicationStatus.HIRED,
+        hiredAt: new Date(),
+      },
+      select: {
+        id: true,
+        status: true,
+        hiredAt: true,
+        candidate: {
+          select: {
+            fullName: true,
+            email: true,
+          },
+        },
+        job: {
+          select: {
+            title: true,
+          },
+        },
+        company: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    let emailSent = false;
+    if (dto.sendEmail) {
+      if (!updated.candidate.email) {
+        this.logger.warn(
+          `Cannot send hire email for application ${applicationId}: candidate has no email`,
+        );
+      } else {
+        try {
+          await this.mailService.sendHireDecisionEmail(
+            updated.candidate.email,
+            updated.candidate.fullName,
+            updated.job.title,
+            updated.company.name,
+          );
+          emailSent = true;
+        } catch (error: unknown) {
+          this.logger.error(
+            `Failed to send hire email for application ${applicationId}: ${
+              error instanceof Error ? error.message : 'Unknown error'
+            }`,
+          );
+        }
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Candidate hired successfully.',
+      data: {
+        applicationId: updated.id,
+        status: updated.status,
+        hiredAt: updated.hiredAt,
+        emailSent,
       },
     };
   }

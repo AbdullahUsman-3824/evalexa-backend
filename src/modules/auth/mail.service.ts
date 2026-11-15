@@ -168,4 +168,39 @@ export class MailService {
       );
     }
   }
+
+  async sendHireDecisionEmail(
+    email: string,
+    candidateName: string,
+    jobTitle: string,
+    companyName: string,
+  ): Promise<void> {
+    this.ensureSmtpConfiguration();
+
+    try {
+      await this.transporter.sendMail({
+        from: this.mailFrom,
+        to: email,
+        subject: `You have been hired - ${jobTitle}`,
+        text: [
+          `Congratulations ${candidateName}!`,
+          '',
+          `We are pleased to offer you the ${jobTitle} position at ${companyName}.`,
+          '',
+          'The hiring team will contact you with the next steps.',
+          '',
+          'Powered by Evalexa',
+        ].join('\n'),
+      });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown SMTP error';
+
+      this.logger.error(`Failed to send hire email to ${email}: ${message}`);
+
+      throw new InternalServerErrorException(
+        `Failed to send hire email: ${message}`,
+      );
+    }
+  }
 }

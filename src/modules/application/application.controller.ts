@@ -26,6 +26,8 @@ import { ApplicationService } from './application.service';
 import { ApplyWithParsedDto } from './dto/apply-with-parsed.dto';
 import { BulkShortlistDto } from './dto/bulk-shortlist.dto';
 import { FindJobApplicationsQueryDto } from './dto/find-job-applications-query.dto';
+import { FindHiredQueryDto } from './dto/find-hired-query.dto';
+import { HireApplicationDto } from './dto/hire-application.dto';
 import { ShortlistListQueryDto } from './dto/shortlist-list-query.dto';
 import { ShortlistTopDto } from './dto/shortlist-top.dto';
 import { ShortlistingService } from './shortlisting.service';
@@ -60,6 +62,15 @@ export class ApplicationController {
   ) {}
 
   // ─── Application ────────────────────────────────────────────────────
+
+  // GET /application/hired
+  @Get('hired')
+  findHired(@User() user: JwtPayload, @Query() query: FindHiredQueryDto) {
+    return this.applicationService.findHired(
+      this.requireCompanyId(user),
+      query,
+    );
+  }
 
   // GET /application/jobs/:jobId
   @Get('jobs/:jobId')
@@ -233,6 +244,21 @@ export class ApplicationController {
     return this.shortlistingService.shortlistOne(
       id,
       this.requireCompanyId(user),
+    );
+  }
+
+  // POST /application/:id/hire
+  @Post(':id/hire')
+  @HttpCode(HttpStatus.OK)
+  hireApplication(
+    @User() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: HireApplicationDto,
+  ) {
+    return this.applicationService.hireApplication(
+      this.requireCompanyId(user),
+      id,
+      dto,
     );
   }
 

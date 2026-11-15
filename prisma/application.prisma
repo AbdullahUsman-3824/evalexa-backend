@@ -16,6 +16,7 @@ model Application {
   isAutoShortlisted Boolean @default(false) @map("is_auto_shortlisted")
 
   appliedAt DateTime @default(now()) @map("applied_at") @db.Timestamptz(6)
+  hiredAt   DateTime? @map("hired_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   candidate Candidate @relation(fields: [candidateId], references: [id])
