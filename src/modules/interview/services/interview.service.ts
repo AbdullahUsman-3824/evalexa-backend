@@ -463,11 +463,17 @@ export class InterviewService {
             company: {
               select: {
                 name: true,
+                logo: true,
               },
             },
             job: {
               select: {
                 title: true,
+                location: true,
+                salaryMin: true,
+                salaryMax: true,
+                salaryCurrency: true,
+                salaryPeriod: true,
               },
             },
           },
@@ -575,6 +581,14 @@ export class InterviewService {
         expiresAt,
         interview.application.company.name,
         interview.application.job.title,
+        interview.application.company.logo ?? undefined,
+        interview.application.job.location ?? undefined,
+        this.formatSalaryRange(
+          interview.application.job.salaryMin,
+          interview.application.job.salaryMax,
+          interview.application.job.salaryCurrency,
+          interview.application.job.salaryPeriod,
+        ),
       );
     } catch (error: unknown) {
       // Mark as FAILED if email sending fails
@@ -827,6 +841,26 @@ export class InterviewService {
       reviewer: request.reviewedBy,
       decisionNote: request.decisionNote,
     };
+  }
+
+  private formatSalaryRange(
+    salaryMin: number | null,
+    salaryMax: number | null,
+    currency: string,
+    period: string | null,
+  ): string | undefined {
+    if (salaryMin === null && salaryMax === null) {
+      return undefined;
+    }
+
+    const amount =
+      salaryMin !== null && salaryMax !== null
+        ? `${salaryMin} - ${salaryMax}`
+        : salaryMin !== null
+          ? `From ${salaryMin}`
+          : `Up to ${salaryMax}`;
+    const unit = period ? `/${period.toLowerCase()}` : '';
+    return `${amount} ${currency}${unit}`;
   }
 
   /** TEMP — delete or stop calling when frontend is done. */

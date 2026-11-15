@@ -204,7 +204,14 @@ export class PublicInterviewService {
     });
 
     try {
-      await this.mailService.sendInterviewOtp(email, otp);
+      await this.mailService.sendInterviewOtp(
+        email,
+        otp,
+        invitation.interview.application.company.name,
+        invitation.interview.application.job.title,
+        invitation.interview.application.company.logo ?? undefined,
+        invitation.interview.application.job.location ?? undefined,
+      );
     } catch (error: unknown) {
       // Roll back OTP state so the candidate is not left with an undelivered OTP.
       await this.db.interviewInvitation.update({
@@ -827,8 +834,17 @@ export class PublicInterviewService {
             application: {
               select: {
                 candidate: { select: { fullName: true, email: true } },
-                company: { select: { name: true } },
-                job: { select: { title: true } },
+                company: { select: { name: true, logo: true } },
+                job: {
+                  select: {
+                    title: true,
+                    location: true,
+                    salaryMin: true,
+                    salaryMax: true,
+                    salaryCurrency: true,
+                    salaryPeriod: true,
+                  },
+                },
               },
             },
           },

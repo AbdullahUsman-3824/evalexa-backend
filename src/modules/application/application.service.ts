@@ -659,6 +659,7 @@ export class ApplicationService {
         company: {
           select: {
             name: true,
+            logo: true,
           },
         },
       },
@@ -677,6 +678,7 @@ export class ApplicationService {
             updated.candidate.fullName,
             updated.job.title,
             updated.company.name,
+            updated.company.logo ?? undefined,
           );
           emailSent = true;
         } catch (error: unknown) {
