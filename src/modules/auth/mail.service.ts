@@ -87,13 +87,21 @@ export class MailService {
     companyName?: string;
     companyLogo?: string;
   }): string {
-    const logoBlock = companyLogo
+    const logoInner = companyLogo
       ? `<img src="${companyLogo}" alt="${companyName ?? 'Evalexa'}" width="40" height="40"
-            style="display:block;margin:0 auto;width:40px;height:40px;border-radius:10px;object-fit:cover;" />`
+            style="display:block;width:40px;height:40px;border-radius:10px;object-fit:contain;border:0;" />`
       : `<span style="font-family:'Syne',system-ui,sans-serif;font-size:24px;
                font-weight:800;color:${BRAND.white};letter-spacing:-0.5px;line-height:1;">
            Eval<span style="color:${BRAND.cyan};">exa</span>
          </span>`;
+
+    const logoBlock = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+        <tr>
+          <td align="center" style="text-align:center;">
+            ${logoInner}
+          </td>
+        </tr>
+      </table>`;
 
     const ctaHtml =
       ctaText && ctaLink
@@ -145,12 +153,12 @@ export class MailService {
     <tr>
       <td align="center" style="padding:48px 16px;">
         
-        <!-- MAIN CONTAINER (Added align="center" and margin:0 auto) -->
+        <!-- MAIN CONTAINER -->
         <table role="presentation" class="container" cellpadding="0" cellspacing="0" width="600" align="center"
                style="max-width:600px;width:100%;margin:0 auto;background-color:${BRAND.bgCard};border-radius:16px;overflow:hidden;border:1px solid ${BRAND.border};box-shadow:0 20px 40px rgba(0,0,0,0.4);">
           
           <tr>
-            <td class="px-mobile" style="padding:40px 40px 24px;text-align:center;">
+            <td class="px-mobile" align="center" style="padding:40px 40px 24px;text-align:center;">
               <div style="margin-bottom:16px;text-align:center;">${logoBlock}</div>
               ${companyName ? `<div style="font-size:12px;color:${BRAND.textMuted};text-transform:uppercase;letter-spacing:2px;font-weight:600;text-align:center;">via ${companyName}</div>` : ''}
             </td>
@@ -174,7 +182,7 @@ export class MailService {
             </td>
           </tr>
           <tr>
-            <td class="px-mobile" style="padding:24px 40px;background-color:${BRAND.bgNavy};border-top:1px solid ${BRAND.border};text-align:center;">
+            <td class="px-mobile" align="center" style="padding:24px 40px;background-color:${BRAND.bgNavy};border-top:1px solid ${BRAND.border};text-align:center;">
               <p style="margin:0;font-size:13px;color:${BRAND.textMuted};text-align:center;">
                 Powered by <a href="${this.frontendUrl}" style="color:${BRAND.cyan};font-weight:600;">Evalexa</a>
               </p>
@@ -297,7 +305,6 @@ export class MailService {
       year: 'numeric',
     });
 
-    // Fixed: Removed display:flex, used standard inline elements
     const metaBits: string[] = [];
     if (jobLocation) metaBits.push(`${jobLocation}`);
     if (salaryRange) metaBits.push(`${salaryRange}`);
@@ -317,7 +324,6 @@ export class MailService {
           Congratulations! You have been selected to interview for:
         </p>
         
-        <!-- Job Box: Ensured text-align center applies to inner elements -->
         <div style="background-color:${BRAND.bgNavy};border-radius:12px;padding:24px;margin:0 0 32px;text-align:center;">
           <div style="font-size:12px;color:${BRAND.cyan};font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;text-align:center;">
             ${companyName}
@@ -467,7 +473,6 @@ export class MailService {
           We are pleased to inform you that you have been selected for the next stage of our recruitment process. Our recruitment team will contact you shortly regarding the next steps.
         </p>
 
-        <!-- Job Details Box (Left Aligned by design for data readability) -->
         <div style="background-color:${BRAND.bgNavy};border-radius:12px;padding:24px;margin:0 0 32px;text-align:left;">
           <div style="font-size:12px;color:${BRAND.success};font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;text-align:left;">
             ${companyName}
