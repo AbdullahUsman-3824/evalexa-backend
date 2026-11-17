@@ -227,7 +227,6 @@ export class ApplicationService {
           status: true,
           hiredAt: true,
           appliedAt: true,
-          matchScore: true,
           job: {
             select: {
               id: true,
@@ -253,7 +252,6 @@ export class ApplicationService {
         status: application.status,
         hiredAt: application.hiredAt,
         appliedAt: application.appliedAt,
-        matchScore: application.matchScore,
         job: application.job,
         candidate: application.candidate,
       })),

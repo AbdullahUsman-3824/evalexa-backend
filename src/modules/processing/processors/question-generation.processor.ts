@@ -4,7 +4,11 @@ import { QUEUE_NAMES } from '../queues/queue-names';
 import { QuestionGenerationJobData } from '../interfaces/job-data.interface';
 import { ProcessingExecutorService } from '../services/processing-executor.service';
 
-@Processor(QUEUE_NAMES.QUESTION_GENERATION, { concurrency: 5 })
+@Processor(QUEUE_NAMES.QUESTION_GENERATION, {
+  concurrency: 5,
+  drainDelay: 60,
+  stalledInterval: 60000,
+})
 export class QuestionGenerationProcessor extends WorkerHost {
   constructor(private readonly executor: ProcessingExecutorService) {
     super();

@@ -5,7 +5,11 @@ import { ProcessingExecutorService } from '../services/processing-executor.servi
 
 type CloseJobPayload = { jobId: string };
 
-@Processor(QUEUE_NAMES.SCHEDULED, { concurrency: 5 })
+@Processor(QUEUE_NAMES.SCHEDULED, {
+  concurrency: 5,
+  drainDelay: 60,
+  stalledInterval: 60000,
+})
 export class JobDeadlineProcessor extends WorkerHost {
   constructor(private readonly executor: ProcessingExecutorService) {
     super();

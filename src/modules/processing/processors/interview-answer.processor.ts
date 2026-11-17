@@ -7,7 +7,11 @@ import {
 } from '../interfaces/job-data.interface';
 import { ProcessingExecutorService } from '../services/processing-executor.service';
 
-@Processor(QUEUE_NAMES.INTERVIEW_ANSWER_PROCESSING, { concurrency: 5 })
+@Processor(QUEUE_NAMES.INTERVIEW_ANSWER_PROCESSING, {
+  concurrency: 5,
+  drainDelay: 60,
+  stalledInterval: 60000,
+})
 export class InterviewAnswerProcessor extends WorkerHost {
   constructor(private readonly executor: ProcessingExecutorService) {
     super();

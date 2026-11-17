@@ -485,8 +485,6 @@ export class MailService {
 
         <p style="margin:0;text-align:center;">Keep an eye on your inbox for further updates from the hiring team.</p>
       `,
-      ctaText: 'View Application',
-      ctaLink: `${this.frontendUrl}/candidate/applications`,
     });
 
     try {

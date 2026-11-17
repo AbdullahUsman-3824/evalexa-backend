@@ -4,7 +4,11 @@ import { QUEUE_NAMES } from '../queues/queue-names';
 import { ApplicationTaskJobData } from '../interfaces/job-data.interface';
 import { ProcessingExecutorService } from '../services/processing-executor.service';
 
-@Processor(QUEUE_NAMES.APPLICATION_PROCESSING, { concurrency: 20 })
+@Processor(QUEUE_NAMES.APPLICATION_PROCESSING, {
+  concurrency: 20,
+  drainDelay: 60,
+  stalledInterval: 60000,
+})
 export class ResumeAnalysisProcessor extends WorkerHost {
   constructor(private readonly executor: ProcessingExecutorService) {
     super();

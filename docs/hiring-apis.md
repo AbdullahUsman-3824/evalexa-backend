@@ -40,7 +40,6 @@ application date, hiring date, and pagination:
       "status": "HIRED",
       "hiredAt": "2026-11-15T12:00:00.000Z",
       "appliedAt": "2026-11-01T12:00:00.000Z",
-      "matchScore": 88,
       "job": {
         "id": "...",
         "title": "Backend Engineer"
